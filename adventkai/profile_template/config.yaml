@@ -1,0 +1,9 @@
+name: "Advent"
+
+# Interfaces - Internal will be used for IPC, external for ... probably nothing?
+interfaces:
+  internal: "127.0.0.1"
+  external: "0.0.0.0"
+
+# internal port used for the link to game server.
+link: 7000

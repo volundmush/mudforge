@@ -1,0 +1,5 @@
+uvloop
+dataclasses-json
+ujson
+websockets
+mudgate
