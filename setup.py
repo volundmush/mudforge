@@ -59,7 +59,7 @@ setup(
     scripts=get_scripts(),
     classifiers=[
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.10",
         "Intended Audience :: Developers",
         "Topic :: Games/Entertainment :: Multi-User Dungeons (MUD)",
         "Topic :: Games/Entertainment :: Puzzle Games",
@@ -67,7 +67,7 @@ setup(
         "Topic :: Games/Entertainment :: Simulation",
         "Topic :: Software Development :: Libraries :: Application Frameworks",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     project_urls={
         "Source": "https://github.com/volundmush/adventkai",
         "Issue tracker": "https://github.com/volundmush/adventkai/issues",
