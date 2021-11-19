@@ -1,0 +1,39 @@
+---
+# the game name
+name: "MudForge"
+
+# TLS data - this must be paths to PEM and KEY files.
+tls:
+  pem: "cert.pem"
+  key: "cert.key"
+
+# Interfaces - Internal will be used for IPC, external for clients
+interfaces:
+  internal: "127.0.0.1" # this should never change...
+  external: "0.0.0.0"
+
+# external ports used by telnet connections.
+# Omit them to disable.
+telnet:
+  plain: 7999
+  tls: 7998
+
+# external ports used by (game client) websocket connections
+# Omit them to disable.
+websocket:
+  plain: 7997
+  tls: 7996
+
+# external port used by SSH. This doesn't have a TLS version because
+# SSH has its own encryption.
+# Omit to disable.
+ssh: 7995
+
+# external ports used by the webserver
+# Omit them to disable.
+website:
+  plain: 80
+  tls: 443
+
+# internal port used for the link to game server.
+link: 7000

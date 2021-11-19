@@ -27,13 +27,13 @@ def get_scripts():
     this means creating a .bat file.
     """
     if OS_WINDOWS:
-        batpath = os.path.join("bin", "windows", "advent.bat")
+        batpath = os.path.join("bin", "windows", "mudforge.bat")
         scriptpath = os.path.join(sys.prefix, "Scripts", "advent_launcher.py")
         with open(batpath, "w") as batfile:
             batfile.write('@"%s" "%s" %%*' % (sys.executable, scriptpath))
-        return [batpath, os.path.join("bin", "windows", "advent_launcher.py")]
+        return [batpath, os.path.join("bin", "windows", "mudforge_launcher.py")]
     else:
-        return [os.path.join("bin", "unix", "advent")]
+        return [os.path.join("bin", "unix", "mudforge")]
 
 
 from os import path
@@ -44,16 +44,16 @@ with open(path.join(this_directory, "README.md"), encoding="utf-8") as f:
 
 # setup the package
 setup(
-    name="advent",
+    name="mudforge",
     version="0.1.0",
     author="VolundMush",
     maintainer="VolundMush",
-    url="https://github.com/advent/advent",
+    url="https://github.com/volundmush/mudforge",
     description="",
     license="LGPL",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=["adventkai",],
+    packages=["mudforge",],
     install_requires=get_requirements(),
     zip_safe=False,
     scripts=get_scripts(),

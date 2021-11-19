@@ -1,0 +1,2 @@
+classes:
+  application: "mudforge.forge.app.MudForge"

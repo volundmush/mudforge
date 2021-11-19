@@ -5,13 +5,14 @@ import string
 from typing import List, Optional, Dict
 
 
-class Advent:
+class MudForge:
     """
     The core of Advent Kai
     """
 
-    def __init__(self, config: Dict):
-        self.name = config.get("name", "advent")
+    def __init__(self, config: Dict, shared: Dict):
+        self.shared = shared
+        self.name = shared.get("name", "Mudforge")
         self.config = config
         self.configured = False
         self.link = None

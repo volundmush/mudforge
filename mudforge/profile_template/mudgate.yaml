@@ -1,0 +1,9 @@
+classes:
+  application: "mudforge.gate.app.MudGate"
+
+processors:
+  xml: "mudforge.gate.processors.xml.process_xml"
+  circle: "mudforge.gate.processors.circle.process_circle"
+
+xml_functions:
+  text: "mudforge.gate.processors.xml.render_xml_text"

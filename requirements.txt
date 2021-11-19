@@ -2,4 +2,6 @@ uvloop
 dataclasses-json
 ujson
 websockets
-mudgate
+pyyaml
+rich
+setproctitle
