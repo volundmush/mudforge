@@ -34,13 +34,6 @@ class TelnetMudConnection(MudConnection):
     async def run_start(self):
         await asyncio.sleep(0.2)
         self.on_start()
-        await asyncio.sleep(1.0)
-        data = {"processor": "xml", "body": [{
-            "data": """<text>This is a test message. <span color="red">And this text will be red!</span></text>""",
-            "mode": "line"
-        }]}
-        await self.process_out_event(ConnectionOutMessage(msg_type=ConnectionOutMessageType.GAMEDATA, client_id=self.conn_id,
-                                                    data=data))
 
     async def data_received(self, data: bytearray):
         self.in_buffer.extend(data)

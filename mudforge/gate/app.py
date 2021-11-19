@@ -9,6 +9,7 @@ from .telnet import TelnetManager
 from .link import LinkManager
 
 from mudforge.app import MudApp
+from mudforge.utils import import_from_module
 
 
 class MudGate(MudApp):
@@ -23,6 +24,12 @@ class MudGate(MudApp):
         self.ws = None
         self.ssh = None
         self.web = None
+        self.processors = dict()
+        for name, path in config.get("processors", dict()).items():
+            processor = import_from_module(path)
+            proc = processor(self)
+            proc.setup()
+            self.processors[name] = proc
 
     async def configure(self):
         interfaces = self.shared.get("interfaces", {"internal": "127.0.0.1", "external": "0.0.0.0"})

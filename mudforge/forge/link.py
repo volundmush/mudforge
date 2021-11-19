@@ -2,30 +2,24 @@ import asyncio
 import ujson
 
 from mudforge.shared import ConnectionDetails, LinkMessage, ConnectionInMessage
+from mudforge.shared import LinkMessageType
 
-
-class Session:
-
-    def __init__(self, connection: "Connection", character, puppet):
-        self.character = character
-        self.connections = set()
-        self.connections.add(connection)
-        self.parser = None
-
-    def is_playing(self):
-        if not self.parser:
-            return False
-        return self.parser.is_playing()
+from websockets import client as ws_client, WebSocketException
 
 
 class Connection:
 
-    def __init__(self, details: ConnectionDetails):
+    def __init__(self, app, details: ConnectionDetails):
+        self.app = app
         self.details = details
-        self.sessions = set()
-        self.parser = None
 
     async def process_in_event(self, msg: ConnectionInMessage):
+        print(f"RECEIVED INMSG: {msg}")
+
+    async def on_connect(self):
+        print(f"CLIENT CONNECTED: {self.details}")
+
+    async def on_disconnect(self, reason: int):
         pass
 
 
@@ -55,7 +49,7 @@ class Link:
         js = ujson.loads(msg_text)
         if "client_id" in js:
             msg = ConnectionInMessage.from_dict(js)
-            if (client := self.manager.connections.get(msg.client_id, None)):
+            if (client := self.manager.app.game_clients.get(msg.client_id, None)):
                 await client.process_in_event(msg)
         elif "process_id" in js:
             msg = LinkMessage.from_dict(js)
@@ -66,8 +60,21 @@ class Link:
             msg = await self.manager.inbox.get()
             await self.ws.send(ujson.dumps(msg.to_dict()))
 
+    async def process_link_message(self, msg: LinkMessage):
+        match msg.msg_type:
+            case LinkMessageType.HELLO:
+                for client_id, cdata in msg.data.items():
+                    details = ConnectionDetails.from_dict(cdata)
+                    await self.create_or_update_client(details)
 
-class NetManager:
+    async def create_or_update_client(self, details: ConnectionDetails):
+        if (client := self.manager.app.game_clients.get(details.client_id, None)):
+            client.update_details(details)
+        else:
+            await self.manager.app.register_connection(details)
+
+
+class LinkManager:
 
     def __init__(self, app, path):
         self.app = app
@@ -80,10 +87,10 @@ class NetManager:
     async def run(self):
         while not self.quitting:
             try:
-                client = await client.connect(self.path)
+                client = await ws_client.connect(self.path)
                 self.link = Link(self, client)
                 await self.link.run()
-            except Exception: # need to make this WebSoccket exceptions...
+            except WebSocketException as e:  # need to make this WebSocket exceptions...
                 self.link.task.cancel()
                 self.link = None
             await asyncio.sleep(1)

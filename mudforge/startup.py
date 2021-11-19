@@ -9,7 +9,7 @@ import setproctitle
 
 
 def main():
-    from mudforge.rich import install
+    from mudforge.mudrich import install
     install()
     from rich.traceback import install as install_tb
     install_tb(show_locals=True)

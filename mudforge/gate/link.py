@@ -5,6 +5,7 @@ import ujson
 
 from mudforge.shared import LinkMessage, LinkMessageType, ConnectionOutMessage
 
+
 class Link:
 
     def __init__(self, manager, ws, path):
@@ -33,9 +34,15 @@ class Link:
     async def process(self, msg_text):
         js = ujson.loads(msg_text)
         if "client_id" in js:
+            clients = []
             msg = ConnectionOutMessage.from_dict(js)
-            if (client := self.manager.app.game_clients.get(msg.client_id, None)):
-                await client.process_out_event(msg)
+            if isinstance(msg.client_id, str):
+                clients.append(msg.client_id)
+            else:
+                clients.extend(msg.client_id)
+            for c in clients:
+                if (client := self.manager.app.game_clients.get(c, None)):
+                    await client.process_out_event(msg)
         elif "process_id" in js:
             msg = LinkMessage.from_dict(js)
             await self.process_link_message(msg)
@@ -44,6 +51,7 @@ class Link:
         while True:
             msg = await self.manager.inbox.get()
             await self.ws.send(ujson.dumps(msg.to_dict()))
+
 
 class LinkManager:
 

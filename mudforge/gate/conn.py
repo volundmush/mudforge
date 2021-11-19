@@ -89,16 +89,18 @@ class MudConnection:
         return attempt
 
     async def process_out_event(self, ev: ConnectionOutMessage):
-        if ev.msg_type == ConnectionOutMessageType.GAMEDATA:
-            await self.process_out_gamedata(ev)
-        elif ev.msg_type == ConnectionOutMessageType.MSSP:
-            await self.process_out_mssp(ev)
-        elif ev.msg_type == ConnectionOutMessageType.DISCONNECT:
-            await self.process_out_disconnect(ev)
+        match ev.msg_type:
+            case ConnectionOutMessageType.GAMEDATA:
+                await self.process_out_gamedata(ev)
+            case ConnectionOutMessageType.MSSP:
+                await self.process_out_mssp(ev)
+            case ConnectionOutMessageType.DISCONNECT:
+                await self.process_out_disconnect(ev)
 
     async def process_out_gamedata(self, ev: ConnectionOutMessage):
-        if ev.data["processor"].lower() == "xml":
-            await self.process_xml(ev.data["body"])
+        proc_name = ev.data.get("processor", "").lower() if ev.data else ""
+        if (proc := self.listener.app.processors.get(proc_name, None)):
+            await proc.process(self, ev.data.get("body", dict()) if ev.data else dict())
 
     async def process_out_mssp(self, ev: ConnectionOutMessage):
         pass

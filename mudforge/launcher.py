@@ -9,14 +9,14 @@ import signal
 import mudforge
 from .utils import partial_match
 
-from mudforge.rich import install as install_rich
+from mudforge.mudrich import install as install_rich
 install_rich()
 from rich.traceback import install as install_tb
 install_tb(show_locals=True)
 
 
 class Launcher:
-    name = "Athanor"
+    name = "MudForge"
     root = os.path.abspath(os.path.dirname(mudforge.__file__))
     startup = os.path.join(
         os.path.abspath(os.path.dirname(mudforge.__file__)), "startup.py"
@@ -111,7 +111,7 @@ class Launcher:
 
     def set_profile_path(self, args):
         cur_dir = os.getcwd()
-        if not os.path.exists(os.path.join(cur_dir, "appdata")):
+        if not os.path.exists(os.path.join(cur_dir, "shared.yaml")):
             raise ValueError(f"Current directory is not a valid {self.name} profile!")
         self.profile_path = cur_dir
 

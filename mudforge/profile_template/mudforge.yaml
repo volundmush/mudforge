@@ -1,2 +1,3 @@
 classes:
   application: "mudforge.forge.app.MudForge"
+  connection: "mudforge.forge.link.Connection"

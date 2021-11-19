@@ -1,7 +1,7 @@
 import time
 import uuid
 
-from typing import Optional
+from typing import Optional, List, Union
 from enum import IntEnum
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -95,7 +95,7 @@ class ConnectionOutMessageType(IntEnum):
 @dataclass
 class ConnectionOutMessage:
     msg_type: ConnectionOutMessageType
-    client_id: str
+    client_id: Union[str, List[str]]
     data: Optional[object]
 
 

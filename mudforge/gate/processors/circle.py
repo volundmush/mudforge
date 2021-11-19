@@ -4,6 +4,8 @@ import re
 
 import random
 
+from .base import BaseProcessor
+
 DEFAULT_COLORS = {
     "0": "0",      # Normal
     "1": "0;36",   # Roomname
@@ -63,42 +65,43 @@ RANDOM_CODES = ["b", "g", "c", "r", "m", "y", "w", "B", "G", "C", "R", "M", "W",
 RE_COLOR = re.compile(r"@(n|d|D|b|B|g|G|c|C|r|R|m|M|y|Y|w|W|x|0|1|2|3|4|5|6|7|l|o|u|e|@|\[\d+\])")
 
 
-def print_circle(entry) -> Text:
+class CircleProcessor(BaseProcessor):
 
-    custom_colors = DEFAULT_COLORS.copy()
-    custom_colors.update(entry.get("colors", dict()))
+    def print_circle(self, entry) -> Text:
 
-    def replace_color(match_obj):
-        m = match_obj.group(1)
-        match m:
-            case "@":
-                return "@"
-            case "x":
-                code = random.choice(RANDOM_CODES)
-                ansi_codes = COLOR_MAP[code]
-            case _:
-                if m.startswith("["):
-                    code = m[1:][:-1]
-                    if code in custom_colors:
-                        ansi_codes = custom_colors[code]
+        custom_colors = DEFAULT_COLORS.copy()
+        custom_colors.update(entry.get("colors", dict()))
+
+        def replace_color(match_obj):
+            m = match_obj.group(1)
+            match m:
+                case "@":
+                    return "@"
+                case "x":
+                    code = random.choice(RANDOM_CODES)
+                    ansi_codes = COLOR_MAP[code]
+                case _:
+                    if m.startswith("["):
+                        code = m[1:][:-1]
+                        if code in custom_colors:
+                            ansi_codes = custom_colors[code]
+                        else:
+                            return m.group(0)
                     else:
-                        return m.group(0)
-                else:
-                    ansi_codes = COLOR_MAP[m]
-        return f"\x02[{ansi_codes}m"
+                        ansi_codes = COLOR_MAP[m]
+            return f"\x1b[{ansi_codes}m"
 
-    in_text = entry.get("text", "")
-    out_text = RE_COLOR.sub(replace_color, in_text)
+        in_text = entry.get("data", "")
+        out_text = RE_COLOR.sub(replace_color, in_text)
 
-    return AnsiDecoder().decode_line(out_text)
+        return AnsiDecoder().decode_line(out_text)
 
-
-async def process_circle(conn, body):
-    for entry in body:
-        rendered = print_circle(entry["data"])
-        mode = entry.get("mode", "line").lower()
-        match mode:
-            case ("line" | "prompt" | "text"):
-                await conn.send_text_data(mode, conn.print(rendered))
-            case _:
-                pass
+    async def process(self, conn, body):
+        for entry in body:
+            rendered = self.print_circle(entry)
+            mode = entry.get("mode", "line").lower()
+            match mode:
+                case ("line" | "prompt" | "text"):
+                    await conn.send_text_data(mode, conn.print(rendered))
+                case _:
+                    pass

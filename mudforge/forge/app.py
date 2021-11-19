@@ -3,24 +3,28 @@ import random
 import string
 
 from typing import List, Optional, Dict
+from mudforge.app import MudApp
+from .link import LinkManager
 
 
-class MudForge:
+class MudForge(MudApp):
     """
-    The core of Advent Kai
+    The core of MudForge.
     """
 
     def __init__(self, config: Dict, shared: Dict):
-        self.shared = shared
-        self.name = shared.get("name", "Mudforge")
-        self.config = config
-        self.configured = False
-        self.link = None
-        self.game = None
-        self.running_services = list()
+        super().__init__(config, shared)
 
     async def configure(self):
-        pass
+        self.link = LinkManager(self, f"ws://{self.shared['interfaces']['internal']}:{self.shared['link']}")
+        self.running_services.append(self.link.run())
 
-    async def run(self):
-        pass
+    async def register_connection(self, details):
+        conn = self.classes["connection"](self, details)
+        self.game_clients[details.client_id] = conn
+        await conn.on_connect()
+
+    async def remove_connection(self, client_id: str, reason: int):
+        if (conn := self.game_clients.get(client_id, None)):
+            await conn.on_disconnect(reason)
+            self.game_clients.pop(client_id, None)
