@@ -100,12 +100,16 @@ class MudConnection:
     async def process_out_gamedata(self, ev: ConnectionOutMessage):
         proc_name = ev.data.get("processor", "").lower() if ev.data else ""
         if (proc := self.listener.app.processors.get(proc_name, None)):
-            await proc.process(self, ev.data.get("body", dict()) if ev.data else dict())
+            await proc.process(self, ev.data.get("data", list()) if ev.data else list())
 
     async def process_out_mssp(self, ev: ConnectionOutMessage):
         pass
 
     async def process_out_disconnect(self, ev: ConnectionOutMessage):
+        self.listener.app.remove_connection(self.details.client_id)
+        await self.do_disconnect()
+
+    def do_disconnect(self):
         pass
 
     def on_start(self):

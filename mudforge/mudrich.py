@@ -5,6 +5,7 @@ import html
 from dataclasses import dataclass
 import random
 import re
+from marshal import loads, dumps
 
 from typing import Any, Dict, Iterable, List, Optional, Type, Union
 
@@ -18,7 +19,9 @@ from rich.console import JustifyMethod, OverflowMethod
 _RE_SQUISH = re.compile("\S+")
 _RE_NOTSPACE = re.compile("[^ ]+")
 
+
 class MudStyle(OLD_STYLE):
+    _tag: str
 
     __slots__ = [
         "_tag",
@@ -150,11 +153,25 @@ class MudStyle(OLD_STYLE):
         new_style._set_attributes = self._set_attributes | style._set_attributes
         new_style._link = style._link or self._link
         new_style._link_id = style._link_id or self._link_id
-        new_style._tag = style._tag or self._tag
-        new_style._xml_attr = style._xml_attr or self._xml_attr
-        new_style._xml_attr_data = style._xml_attr_data or self._xml_attr_data
+
+        new_style._tag = None
+        if hasattr(style, "_tag") and hasattr(self, "_tag"):
+            new_style._tag = style._tag or self._tag
+
+        new_style._xml_attr = None
+        if hasattr(style, "_xml_attr") and hasattr(self, "_xml_attr"):
+            new_style._xml_attr = style._xml_attr or self._xml_attr
+
+        new_style._xml_attr_data = ""
+        if hasattr(style, "_xml_attr_data") and hasattr(self, "_xml_attr_data"):
+            new_style._xml_attr_data = style._xml_attr_data or self._xml_attr_data
+
         new_style._hash = style._hash
         new_style._null = self._null or style._null
+        if self._meta and style._meta:
+            new_style._meta = dumps({**self.meta, **style.meta})
+        else:
+            new_style._meta = self._meta or style._meta
 
         return new_style
 

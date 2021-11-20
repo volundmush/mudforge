@@ -4,6 +4,7 @@ import string
 
 from typing import List, Optional, Dict
 from mudforge.app import MudApp
+from mudforge.shared import ConnectionOutMessage, ConnectionOutMessageType
 from .link import LinkManager
 
 
@@ -27,4 +28,7 @@ class MudForge(MudApp):
     async def remove_connection(self, client_id: str, reason: int):
         if (conn := self.game_clients.get(client_id, None)):
             await conn.on_disconnect(reason)
+            if reason:
+                msg = ConnectionOutMessage(msg_type=ConnectionOutMessageType.DISCONNECT, client_id=client_id, data=None)
+                await self.link.inbox.put(msg)
             self.game_clients.pop(client_id, None)

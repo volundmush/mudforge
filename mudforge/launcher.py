@@ -27,6 +27,7 @@ class Launcher:
         )
     )
     application_names = ["mudgate", "mudforge"]
+    env_vars = dict()
 
     def __init__(self):
         self.parser = self.create_parser()
@@ -123,6 +124,7 @@ class Launcher:
             env = os.environ.copy()
             env["MUDFORGE_PROFILE"] = self.profile_path
             env["MUDFORGE_APPNAME"] = app
+            env.update(self.env_vars)
             cmd = f"{sys.executable} {self.startup}"
             subprocess.Popen(shlex.split(cmd), env=env)
 

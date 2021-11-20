@@ -1,7 +1,7 @@
 import asyncio
 import ujson
 
-from mudforge.shared import ConnectionDetails, LinkMessage, ConnectionInMessage
+from mudforge.shared import ConnectionDetails, LinkMessage, ConnectionInMessage, ConnectionInMessageType
 from mudforge.shared import LinkMessageType
 
 from websockets import client as ws_client, WebSocketException
@@ -14,7 +14,34 @@ class Connection:
         self.details = details
 
     async def process_in_event(self, msg: ConnectionInMessage):
-        print(f"RECEIVED INMSG: {msg}")
+        match msg.msg_type:
+            case ConnectionInMessageType.GAMEDATA:
+                await self.process_gamedata(msg)
+            case ConnectionInMessageType.CONNECT:
+                pass  # Connect isn't actually used anymore...
+            case ConnectionInMessageType.READY:
+                await self.process_ready(msg)
+            case ConnectionInMessageType.MSSP:
+                await self.process_mssp(msg)
+            case ConnectionInMessageType.UPDATE:
+                await self.process_update(msg)
+            case ConnectionInMessageType.DISCONNECT:
+                await self.process_disconnect(msg)
+
+    async def process_gamedata(self, msg: ConnectionInMessage):
+        pass
+
+    async def process_mssp(self, msg: ConnectionInMessage):
+        pass
+
+    async def process_ready(self, msg: ConnectionInMessage):
+        pass
+
+    async def process_update(self, msg: ConnectionInMessage):
+        pass
+
+    async def process_disconnect(self, msg: ConnectionInMessage):
+        self.app.remove_connection(self.details.client_id, 0)
 
     async def on_connect(self):
         print(f"CLIENT CONNECTED: {self.details}")
@@ -47,10 +74,16 @@ class Link:
 
     async def process(self, msg_text):
         js = ujson.loads(msg_text)
+        print(f"FORGE RECEIVED MSG: {js}")
         if "client_id" in js:
             msg = ConnectionInMessage.from_dict(js)
             if (client := self.manager.app.game_clients.get(msg.client_id, None)):
                 await client.process_in_event(msg)
+            else:
+                match msg.msg_type:
+                    case ConnectionInMessageType.READY:
+                        details = ConnectionDetails.from_dict(msg.data)
+                        await self.create_or_update_client(details)
         elif "process_id" in js:
             msg = LinkMessage.from_dict(js)
             await self.process_link_message(msg)
@@ -58,6 +91,7 @@ class Link:
     async def write(self):
         while True:
             msg = await self.manager.inbox.get()
+            print(f"FORGE SENDING MESSAGE: {msg}")
             await self.ws.send(ujson.dumps(msg.to_dict()))
 
     async def process_link_message(self, msg: LinkMessage):

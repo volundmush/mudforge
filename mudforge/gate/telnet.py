@@ -22,6 +22,7 @@ class TelnetMudConnection(MudConnection):
         self.listener = listener
         self.reader = reader
         self.writer = writer
+        self.task = None
         self.in_buffer = bytearray()
 
     def on_start(self):
@@ -54,12 +55,20 @@ class TelnetMudConnection(MudConnection):
         if self.telnet_in_events:
             self.process_telnet_events()
 
+    async def run_all(self):
+        await asyncio.gather(self.run_start(), self.run_reader(), self.run_in_events())
+
     async def run(self):
         self.running = True
         out_buffer = bytearray()
         self.telnet.start(out_buffer)
         self.writer.write(out_buffer)
-        await asyncio.gather(self.run_start(), self.run_reader(), self.run_in_events())
+        self.task = asyncio.create_task(self.run_all())
+        await self.task
+
+    async def do_disconnect(self):
+        if self.task:
+            self.task.cancel()
 
     async def run_reader(self):
         while (data := await self.reader.read(1024)):
@@ -135,7 +144,7 @@ class TelnetMudConnection(MudConnection):
     }
 
     async def send_text_data(self, mode: str, data: str):
-        msg_type = self.msg_map.get(mode)
+        msg_type = self.msg_map.get(mode, TelnetOutMessageType.LINE)
         out = bytearray()
         self.telnet.process_out_message(TelnetOutMessage(msg_type, data), out)
         self.writer.write(out)

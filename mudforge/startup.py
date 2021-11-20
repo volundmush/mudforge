@@ -3,7 +3,7 @@ import os
 import sys
 import traceback
 import asyncio
-import yaml
+from ruamel.yaml import YAML
 from mudforge.utils import import_from_module
 import setproctitle
 
@@ -22,11 +22,13 @@ def main():
     app_name = env["MUDFORGE_APPNAME"]
     setproctitle.setproctitle(app_name)
 
+    y = YAML(typ="safe")
+
     try:
         with open(f"{app_name}.yaml", "r") as f:
-            config = yaml.safe_load(f)
+            config = y.load(f)
         with open("shared.yaml", "r") as f:
-            shared = yaml.safe_load(f)
+            shared = y.load(f)
     except Exception:
         raise Exception("Could not import config!")
 

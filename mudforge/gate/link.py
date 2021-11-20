@@ -33,6 +33,7 @@ class Link:
 
     async def process(self, msg_text):
         js = ujson.loads(msg_text)
+        print(f"GATE RECEIVED MESSAGE: {js}")
         if "client_id" in js:
             clients = []
             msg = ConnectionOutMessage.from_dict(js)
@@ -50,6 +51,7 @@ class Link:
     async def write(self):
         while True:
             msg = await self.manager.inbox.get()
+            print(f"GATE IS SENDING MESSAGE: {msg}")
             await self.ws.send(ujson.dumps(msg.to_dict()))
 
 

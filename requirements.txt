@@ -2,6 +2,6 @@ uvloop
 dataclasses-json
 ujson
 websockets
-pyyaml
+ruamel.yaml
 rich
 setproctitle
