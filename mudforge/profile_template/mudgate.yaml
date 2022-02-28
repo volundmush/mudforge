@@ -2,8 +2,6 @@ classes:
   application: "mudforge.gate.app.MudGate"
 
 processors:
-  xml: "mudforge.gate.processors.xml.XmlProcessor"
+  raw: "mudforge.gate.processors.raw.RawProcessor"
   circle: "mudforge.gate.processors.circle.CircleProcessor"
-
-xml_functions:
-  text: "mudforge.gate.processors.xml.render_xml_text"
+  picklerich: "mudforge.gate.processors.picklerich.PickleRichProcessor"

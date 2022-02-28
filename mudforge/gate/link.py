@@ -4,6 +4,7 @@ from websockets import server
 import ujson
 
 from mudforge.shared import LinkMessage, LinkMessageType, ConnectionOutMessage
+from mudforge.app import Service
 
 
 class Link:
@@ -13,6 +14,11 @@ class Link:
         self.ws = ws
         self.path = path
         self.task = None
+
+    async def close(self):
+        self.task.cancel()
+        self.task = None
+        await self.ws.close()
 
     async def run(self):
         await self.on_connect()
@@ -55,22 +61,21 @@ class Link:
             await self.ws.send(ujson.dumps(msg.to_dict()))
 
 
-class LinkManager:
+class LinkManager(Service):
 
     def __init__(self, app, interface: str, port: int):
+        super().__init__()
         self.app = app
         self.interface = interface
         self.port = port
         self.inbox = asyncio.Queue()
         self.link = None
-        self.quitting = False
         self.ready = False
-        self.server = None
+        self.stop_task = asyncio.Future()
 
-    async def run(self):
-        self.server = await server.serve(self.handle_ws, host=self.interface, port=self.port)
-        while not self.quitting:
-            await asyncio.sleep(1)
+    async def run_service(self):
+        async with server.serve(self.handle_ws, host=self.interface, port=self.port):
+            await self.stop_task
 
     async def handle_ws(self, ws, path):
         if self.link:
@@ -79,5 +84,12 @@ class LinkManager:
         await self.link.run()
 
     async def close_link(self):
-        self.link.task.cancel()
+        self.link.close()
         self.link = None
+
+    async def graceful_terminate(self, reason: str = "Shutting down."):
+        if self.link:
+            await self.close_link()
+        self.stop_task.set_result(True)
+        self.task.cancel()
+        self.task = None

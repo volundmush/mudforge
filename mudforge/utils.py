@@ -3,22 +3,7 @@ import uuid
 import typing
 import random
 import string
-import logging
-from logging.handlers import TimedRotatingFileHandler
-from rich.logging import RichHandler
 
-def create_logger(name: str, filename: str, level = logging.DEBUG):
-    logger = logging.getLogger(name)
-    formatter = logging.Formatter(fmt="[%(asctime)s] %(message)s", datefmt="%x %X")
-    handler = TimedRotatingFileHandler(f"logs/{filename}.log", encoding="utf-8", utc=True,
-                                       when="midnight", interval=1, backupCount=14)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    rhandler = RichHandler(rich_tracebacks=True)
-    rhandler.setFormatter(formatter)
-    logger.addHandler(rhandler)
-    logger.setLevel(level)
-    return logger
 
 def import_from_module(path: str) -> typing.Any:
     if not path:
@@ -234,7 +219,7 @@ def partial_match(
 
 def generate_name(prefix: str, existing, gen_length: int = 20):
     def gen():
-        return f"{prefix}_{''.join(random.choices(string.ascii_letters + string.digits, k=20))}"
+        return f"{prefix}_{''.join(random.choices(string.ascii_letters + string.digits, k=gen_length))}"
 
     while (u := gen()) not in existing:
         return u

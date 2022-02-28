@@ -7,6 +7,7 @@ from .telnet_protocol import TelnetFrame, TelnetConnection, TelnetOutMessage, Te
 from .telnet_protocol import TelnetInMessage, TelnetInMessageType
 from mudforge.shared import COLOR_MAP, ConnectionDetails, MudProtocol
 from mudforge.shared import ConnectionInMessageType, ConnectionOutMessage, ConnectionInMessage, ConnectionOutMessageType
+from mudforge.app import Service
 
 from .conn import MudConnection
 from mudforge.utils import generate_name
@@ -86,34 +87,35 @@ class TelnetMudConnection(MudConnection):
 
     def update_details(self, changed: dict):
         for k, v in changed.items():
-            if k in ("local", "remote"):
-                for feature, value in v.items():
-                    setattr(self.details, feature, value)
-            elif k == "naws":
-                self.details.width = v.get('width', 78)
-                self.details.height = v.get('height', 24)
-            elif k == "mccp2":
-                for feature, val in v.items():
-                    if feature == "active":
-                        self.details.mccp2_active = val
-            elif k == "mccp3":
-                for feature, val in v.items():
-                    if feature == "active":
-                        self.details.mccp3_active = val
-            elif k == "mtts":
-                for feature, val in v.items():
-                    if feature in ("ansi", "xterm256", "truecolor"):
-                        if not val:
-                            self.details.color = None
-                        else:
-                            mapped = COLOR_MAP[feature]
-                            if not self.details.color:
-                                self.details.color = mapped
+            match k:
+                case "local" | "remote":
+                    for feature, value in v.items():
+                        setattr(self.details, feature, value)
+                case "naws":
+                    self.details.width = v.get('width', 78)
+                    self.details.height = v.get('height', 24)
+                case "mccp2":
+                    for feature, val in v.items():
+                        if feature == "active":
+                            self.details.mccp2_active = val
+                case "mccp3":
+                    for feature, val in v.items():
+                        if feature == "active":
+                            self.details.mccp3_active = val
+                case "mtts":
+                    for feature, val in v.items():
+                        if feature in ("ansi", "xterm256", "truecolor"):
+                            if not val:
+                                self.details.color = None
                             else:
-                                if mapped > self.details.color:
+                                mapped = COLOR_MAP[feature]
+                                if not self.details.color:
                                     self.details.color = mapped
-                    else:
-                        setattr(self.details, feature, val)
+                                else:
+                                    if mapped > self.details.color:
+                                        self.details.color = mapped
+                        else:
+                            setattr(self.details, feature, val)
 
         self.console._mxp = self.details.mxp_active
         self.console._color_system = self.details.color
@@ -166,11 +168,12 @@ class TelnetMudConnection(MudConnection):
         pass
 
 
-class TelnetManager:
+class TelnetManager(Service):
     protocol = TelnetMudConnection
     protocol_name = "TELNET"
 
     def __init__(self, app, interface: str, plain: Optional[int], tls: Optional[int]):
+        super(TelnetManager, self).__init__()
         self.app = app
         self.interface = interface
         self.plain = plain
@@ -179,7 +182,7 @@ class TelnetManager:
         self.server_plain = None
         self.server_tls = None
 
-    async def run(self):
+    async def run_service(self):
         await asyncio.gather(self.run_plain(), self.run_tls())
 
     async def setup(self):
@@ -210,3 +213,9 @@ class TelnetManager:
     async def run_tls(self):
         if self.server_tls:
             await self.server_tls.serve_forever()
+
+    async def graceful_terminate(self, reason: str = "Shutting down."):
+        if self.server_plain:
+            self.server_plain.close()
+        if self.server_tls:
+            self.server_tls.close()

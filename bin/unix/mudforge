@@ -1,5 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.10
 
+"""
+This is the Unix launcher 'binary' for the program, which brings up the CLI.
+
+This program is not really meant to be used directly. It is expected that a program built on MudForge
+will create its own sub-class of mudforge.launcher.Launcher and its own CLI command. This launcher
+is thus just an example.
+"""
 
 if __name__ == "__main__":
     from mudforge.launcher import Launcher

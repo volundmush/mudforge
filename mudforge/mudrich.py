@@ -628,6 +628,7 @@ def test():
     from rich.console import Console
     from rich.style import Style
     from rich.text import Text
+    import pickle
 
     c = Console(mxp=True)
 
@@ -641,3 +642,9 @@ def test():
     print(type(t))
 
     c.print(t)
+
+    p = pickle.dumps(t)
+    print(p)
+    print(type(p))
+    p2 = pickle.loads(p)
+    c.print(p2)

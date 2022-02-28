@@ -1,5 +1,3 @@
-import random
-import string
 import time
 from mudforge.shared import (
     ConnectionDetails,
@@ -12,9 +10,6 @@ from enum import IntEnum
 
 from rich.console import Console
 from rich.color import ColorSystem
-
-from rich.text import Text
-from rich.style import Style
 
 
 COLOR_MAP = {
@@ -79,14 +74,6 @@ class MudConnection:
 
     def do_print(self):
         return self.console.export_text(clear=True, styles=True)
-
-    def generate_name(self) -> str:
-        prefix = f"{self.listener.name}_"
-
-        attempt = f"{prefix}{''.join(random.choices(string.ascii_letters + string.digits, k=20))}"
-        while attempt in self.listener.service.mudconnections:
-            attempt = f"{prefix}{''.join(random.choices(string.ascii_letters + string.digits, k=20))}"
-        return attempt
 
     async def process_out_event(self, ev: ConnectionOutMessage):
         match ev.msg_type:

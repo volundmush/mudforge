@@ -3,6 +3,7 @@ import ujson
 
 from mudforge.shared import ConnectionDetails, LinkMessage, ConnectionInMessage, ConnectionInMessageType
 from mudforge.shared import LinkMessageType
+from mudforge.app import Service
 
 from websockets import client as ws_client, WebSocketException
 
@@ -68,6 +69,11 @@ class Link:
     async def on_connect(self):
         return
 
+    async def close(self):
+        self.ws.close()
+        self.task.cancel()
+        self.task = None
+
     async def read(self):
         async for message in self.ws:
             await self.process(message)
@@ -108,17 +114,18 @@ class Link:
             await self.manager.app.register_connection(details)
 
 
-class LinkManager:
+class LinkManager(Service):
 
     def __init__(self, app, path):
+        super().__init__()
         self.app = app
         self.path = path
         self.inbox = asyncio.Queue()
         self.link = None
-        self.quitting = False
         self.ready = False
+        self.quitting = False
 
-    async def run(self):
+    async def run_service(self):
         while not self.quitting:
             try:
                 client = await ws_client.connect(self.path)
@@ -127,7 +134,8 @@ class LinkManager:
             except WebSocketException as e:  # need to make this WebSocket exceptions...
                 self.link.task.cancel()
                 self.link = None
-            await asyncio.sleep(1)
+            if not self.quitting:
+                await asyncio.sleep(1)
 
     async def handle_connect(self, ws):
         if self.link:
@@ -136,5 +144,12 @@ class LinkManager:
         await self.link.run()
 
     async def close_link(self):
-        self.link.task.cancel()
+        if self.link:
+            await self.link.close()
         self.link = None
+
+    async def graceful_terminate(self, reason: str = "Shutting down."):
+        self.quitting = True
+        await self.close_link()
+        self.task.cancel()
+        self.task = None

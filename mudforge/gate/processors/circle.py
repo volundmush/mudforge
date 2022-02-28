@@ -1,3 +1,8 @@
+"""
+This is supposed to be a Gate-side processor for CircleMUD style ANSI...
+In the new design this'll probably be best moved to Forge-side.
+"""
+
 from rich.text import Text
 from rich.ansi import AnsiDecoder
 import re
@@ -66,6 +71,7 @@ RE_COLOR = re.compile(r"@(n|d|D|b|B|g|G|c|C|r|R|m|M|y|Y|w|W|x|0|1|2|3|4|5|6|7|l|
 
 
 class CircleProcessor(BaseProcessor):
+    decoder = AnsiDecoder()
 
     def print_circle(self, entry) -> Text:
 
@@ -94,7 +100,7 @@ class CircleProcessor(BaseProcessor):
         in_text = entry.get("data", "")
         out_text = RE_COLOR.sub(replace_color, in_text)
 
-        return AnsiDecoder().decode_line(out_text)
+        return self.decoder.decode_line(out_text)
 
     async def process(self, conn, body):
         for entry in body:
