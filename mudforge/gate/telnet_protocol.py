@@ -1,3 +1,4 @@
+import asyncio
 import zlib
 from typing import Dict, Tuple, Optional, Union, List
 from enum import IntEnum
@@ -205,27 +206,13 @@ class TelnetOptionPerspective:
         self.asked = False
 
 
-class TelnetHandshakeHolder:
-    __slots__ = ["local", "remote", "special"]
-
-    def __init__(
-        self,
-    ):
-        self.local = set()
-        self.remote = set()
-        self.special = set()
-
-    def has_remaining(self):
-        return self.local or self.remote or self.special
-
-
 class TelnetOptionHandler:
-    opcode = 0
-    opname = None
-    support_local = False
-    support_remote = False
-    start_will = False
-    start_do = False
+    opcode: TC = TC.NULL
+    opname: str = None
+    support_local: bool = False
+    support_remote: bool = False
+    start_will: bool = False
+    start_do: bool = False
     hs_local = []
     hs_remote = []
     hs_special = []
@@ -235,6 +222,18 @@ class TelnetOptionHandler:
     def __init__(self):
         self.local = TelnetOptionPerspective()
         self.remote = TelnetOptionPerspective()
+
+    def ready(self):
+        return ((self.local.enabled and self.support_local) or
+                (self.remote.enabled and self.support_remote)) and self.special_ready()
+
+    def special_ready(self):
+        return True
+
+    async def is_ready(self):
+        while not self.ready:
+            await asyncio.sleep(0.05)
+        return True
 
     def subnegotiate(self, data: bytes, imsg: _InternalMsg):
         pass
@@ -275,30 +274,31 @@ class TelnetOptionHandler:
                 state.negotiating = False
 
     def negotiate(self, cmd: int, imsg: _InternalMsg):
-        if cmd == TC.WILL:
-            self._negotiate(
-                imsg,
-                self.support_remote,
-                self.remote,
-                TC.DO,
-                TC.DONT,
-                self.enable_remote,
-                "remote",
-            )
-        elif cmd == TC.DO:
-            self._negotiate(
-                imsg,
-                self.support_local,
-                self.local,
-                TC.WILL,
-                TC.WONT,
-                self.enable_local,
-                "local",
-            )
-        elif cmd == TC.WONT:
-            self._reject(imsg, self.remote, self.disable_remote, "remote")
-        elif cmd == TC.DONT:
-            self._reject(imsg, self.local, self.disable_local, "local")
+        match cmd:
+            case TC.WILL:
+                self._negotiate(
+                    imsg,
+                    self.support_remote,
+                    self.remote,
+                    TC.DO,
+                    TC.DONT,
+                    self.enable_remote,
+                    "remote",
+                )
+            case TC.DO:
+                self._negotiate(
+                    imsg,
+                    self.support_local,
+                    self.local,
+                    TC.WILL,
+                    TC.WONT,
+                    self.enable_local,
+                    "local",
+                )
+            case TC.WONT:
+                self._reject(imsg, self.remote, self.disable_remote, "remote")
+            case TC.DONT:
+                self._reject(imsg, self.local, self.disable_local, "local")
 
     def enable_local(self, imsg: _InternalMsg):
         pass
@@ -360,16 +360,16 @@ class MTTSHandler(TelnetOptionHandler):
         imsg.protocol.send_subnegotiate(self.opcode, [1], imsg)
 
     def enable_remote(self, imsg: _InternalMsg):
-        imsg.protocol.handshakes.special.update(self.hs_special)
         self.request(imsg)
+
+    def special_ready(self):
+        return self.stage == 3
 
     def subnegotiate(self, data: bytes, imsg: _InternalMsg):
         if data == self.previous:
             # we're not going to learn anything new from this client...
-            for code in self.hs_special:
-                if code in imsg.protocol.handshakes.special:
-                    imsg.protocol.handshakes.special.remove(code)
             self.previous = None
+            self.stage = 3
 
         if data[0] == 0:
             self.previous = data
@@ -583,14 +583,13 @@ class TelnetConnection:
         "out_compressor",
         "handshakes",
         "app_linemode",
-        "sga",
+        "sga"
     ]
 
     def __init__(self, app_linemode: bool = True, sga: bool = True):
         self.cmdbuff = bytearray()
         self.handlers = {hc.opcode: hc() for hc in self.handler_classes}
         self.out_compressor = None
-        self.handshakes = TelnetHandshakeHolder()
         self.app_linemode = app_linemode
         self.sga = sga
 
@@ -605,11 +604,6 @@ class TelnetConnection:
                 out.extend(bytearray([TC.IAC, TC.DO, k]))
                 v.remote.negotiating = True
                 v.remote.asked = True
-
-            if v.hs_local:
-                self.handshakes.local.update(v.hs_local)
-            if v.hs_remote:
-                self.handshakes.remote.update(v.hs_remote)
 
     def sanitize_text(self, data: Union[bytes, bytearray]) -> bytearray:
         data = bytearray(data)
@@ -711,16 +705,14 @@ class TelnetConnection:
             )
 
     def negotiate(self, cmd: int, option: int, imsg: _InternalMsg):
-        handler = self.handlers.get(option, None)
-        if handler:
+        if handler := self.handlers.get(option, None):
             handler.negotiate(cmd, imsg)
         else:
             response = NEG_OPPOSITES.get(cmd, None)
             self.send_negotiate(response, option, imsg)
 
     def subnegotiate(self, option: int, data: bytes, imsg: _InternalMsg):
-        handler = self.handlers.get(option, None)
-        if handler:
+        if handler := self.handlers.get(option, None):
             handler.subnegotiate(data, imsg)
 
     def send_negotiate(self, cmd: int, option: int, imsg: _InternalMsg):

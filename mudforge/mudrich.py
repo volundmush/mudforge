@@ -539,51 +539,6 @@ class MudText(OLD_TEXT):
                 idx.append((self.style_at_index(i), c))
             return idx
 
-        def serialize(self) -> dict:
-            def ser_style(style):
-                if isinstance(style, str):
-                    style = MudStyle.parse(style)
-                if not isinstance(style, MudStyle):
-                    style = MudStyle.upgrade(style)
-                return style.serialize()
-
-            def ser_span(span):
-                if not span.style:
-                    return None
-                return {
-                    "start": span.start,
-                    "end": span.end,
-                    "style": ser_style(span.style),
-                }
-
-            out = {"text": self.plain}
-
-            if self.style:
-                out["style"] = ser_style(self.style)
-
-            out_spans = [s for span in self.spans if (s := ser_span(span))]
-
-            if out_spans:
-                out["spans"] = out_spans
-
-            return out
-
-        @classmethod
-        def deserialize(cls, data) -> "Text":
-            text = data.get("text", None)
-            if text is None:
-                return cls("")
-            style = data.get("style", None)
-            if style:
-                style = MudStyle(**style)
-
-            spans = data.get("spans", None)
-
-            if spans:
-                spans = [Span(s["start"], s["end"], MudStyle(**s["style"])) for s in spans]
-
-            return cls(text=text, style=style, spans=spans)
-
         def squish(self) -> "MudText":
             """
             Removes leading and trailing whitespace, and coerces all internal whitespace sequences
@@ -605,11 +560,54 @@ class MudText(OLD_TEXT):
                 out.append(self[match.start(): match.end()])
             return self.__class__(" ").join(out)
 
+        @classmethod
+        def assemble(
+                cls,
+                *parts: Union[str, "Text", Tuple[str, StyleType]],
+                style: Union[str, Style] = "",
+                justify: Optional["JustifyMethod"] = None,
+                overflow: Optional["OverflowMethod"] = None,
+                no_wrap: Optional[bool] = None,
+                end: str = "\n",
+                tab_size: int = 8,
+                meta: Optional[Dict[str, Any]] = None,
+        ) -> "Text":
+            """Construct a text instance by combining a sequence of strings with optional styles.
+            The positional arguments should be either strings, or a tuple of string + style.
+            Args:
+                style (Union[str, Style], optional): Base style for text. Defaults to "".
+                justify (str, optional): Justify method: "left", "center", "full", "right". Defaults to None.
+                overflow (str, optional): Overflow method: "crop", "fold", "ellipsis". Defaults to None.
+                end (str, optional): Character to end text with. Defaults to "\\\\n".
+                tab_size (int): Number of spaces per tab, or ``None`` to use ``console.tab_size``. Defaults to 8.
+                meta (Dict[str, Any], optional). Meta data to apply to text, or None for no meta data. Default to None
+            Returns:
+                Text: A new text instance.
+            """
+            text = cls(
+                style=style,
+                justify=justify,
+                overflow=overflow,
+                no_wrap=no_wrap,
+                end=end,
+                tab_size=tab_size,
+            )
+            append = text.append
+            _Text = cls
+            for part in parts:
+                if isinstance(part, (_Text, str)):
+                    append(part)
+                else:
+                    append(*part)
+            if meta:
+                text.apply_meta(meta)
+            return
+
 DEFAULT_STYLES = dict()
 
 
 def install():
-    from rich import style, text, console, default_styles, themes
+    from rich import style, text, console, default_styles, themes, syntax, traceback
     global DEFAULT_STYLES
     style.Style = MudStyle
     style.NULL_STYLE = MudStyle()
@@ -617,8 +615,18 @@ def install():
     console.Console = MudConsole
     console.ConsoleOptions = MudConsoleOptions
 
+    traceback.Style = MudStyle
+    syntax.Style = MudStyle
+    traceback.Text = MudText
+    syntax.Text = MudText
+
     for k, v in default_styles.DEFAULT_STYLES.items():
         DEFAULT_STYLES[k] = MudStyle.upgrade(v)
+
+    for theme in syntax.RICH_SYNTAX_THEMES.values():
+        for k, v in theme.items():
+            if isinstance(v, OLD_STYLE):
+                theme[k] = MudStyle.upgrade(v)
 
     default_styles.DEFAULT_STYLES = DEFAULT_STYLES
     themes.DEFAULT = themes.Theme(DEFAULT_STYLES)

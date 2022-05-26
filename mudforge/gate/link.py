@@ -1,16 +1,18 @@
 import asyncio
 import os
-from websockets import server
-import ujson
+import pickle
 
-from mudforge.shared import LinkMessage, LinkMessageType, ConnectionOutMessage
-from mudforge.app import Service
+from websockets import server
+from aiomisc import Service, get_context
+from rich.text import Text
+
+from mudforge.shared import LinkMsg, Hello
 
 
 class Link:
 
-    def __init__(self, manager, ws, path):
-        self.manager = manager
+    def __init__(self, service, ws, path):
+        self.service = service
         self.ws = ws
         self.path = path
         self.task = None
@@ -21,75 +23,80 @@ class Link:
         await self.ws.close()
 
     async def run(self):
-        await self.on_connect()
         self.task = asyncio.create_task(self.run_do())
         await self.task
 
     async def run_do(self):
+        await self.on_connect()
         await asyncio.gather(self.read(), self.write())
 
     async def on_connect(self):
-        clients = {k: v.details.to_dict() for k, v in self.manager.app.game_clients.items()}
-        msg = LinkMessage(LinkMessageType.HELLO, os.getpid(), clients)
-        await self.ws.send(ujson.dumps(msg.to_dict()))
+        context = get_context()
+        conns = await context["connections"]
+        inbox = await context["link_inbox"]
+        clients = {k: v.details for k, v in conns.items()}
+        msg = Hello(process_id=os.getpid(), clients=clients)
+        await inbox.put(msg)
 
     async def read(self):
         async for message in self.ws:
-            await self.process(message)
+            if isinstance(message.__class__, str):
+                await self.process_str(message)
+            elif isinstance(message.__class__, bytes):
+                await self.process_bytes(message)
 
-    async def process(self, msg_text):
-        js = ujson.loads(msg_text)
-        print(f"GATE RECEIVED MESSAGE: {js}")
-        if "client_id" in js:
-            clients = []
-            msg = ConnectionOutMessage.from_dict(js)
-            if isinstance(msg.client_id, str):
-                clients.append(msg.client_id)
-            else:
-                clients.extend(msg.client_id)
-            for c in clients:
-                if (client := self.manager.app.game_clients.get(c, None)):
-                    await client.process_out_event(msg)
-        elif "process_id" in js:
-            msg = LinkMessage.from_dict(js)
-            await self.process_link_message(msg)
+    async def process_str(self, msg_text):
+        pass
+
+    async def process_bytes(self, msg_text):
+        msg = pickle.loads(msg_text)
+        if isinstance(msg, LinkMsg):
+            await msg.process(self.service.app)
 
     async def write(self):
+        context = get_context()
+        inbox = await context["link_inbox"]
         while True:
-            msg = await self.manager.inbox.get()
-            print(f"GATE IS SENDING MESSAGE: {msg}")
-            await self.ws.send(ujson.dumps(msg.to_dict()))
+            msg = await inbox.get()
+            print(f"Gate Sending Message: {msg}")
+            await self.ws.send(pickle.dumps(msg))
 
 
-class LinkManager(Service):
+class LinkService(Service):
 
-    def __init__(self, app, interface: str, port: int):
-        super().__init__()
-        self.app = app
-        self.interface = interface
-        self.port = port
-        self.inbox = asyncio.Queue()
-        self.link = None
-        self.ready = False
-        self.stop_task = asyncio.Future()
-
-    async def run_service(self):
-        async with server.serve(self.handle_ws, host=self.interface, port=self.port):
-            await self.stop_task
+    async def start(self):
+        context = get_context()
+        context["link_inbox"] = asyncio.Queue()
+        context["link"] = None
+        shared = await context["shared"]
+        interface = shared["interfaces"]["internal"]
+        await server.serve(self.handle_ws, host=interface, port=shared["link"])
 
     async def handle_ws(self, ws, path):
-        if self.link:
+        context = get_context()
+        if await context["link"]:
             await self.close_link()
-        self.link = Link(self, ws, path)
-        await self.link.run()
+        link = Link(self, ws, path)
+        context["link"] = link
+        await link.run()
 
     async def close_link(self):
-        self.link.close()
-        self.link = None
+        context = get_context()
+        link = await context["link"]
+        await link.close()
+        context["link"] = None
 
-    async def graceful_terminate(self, reason: str = "Shutting down."):
-        if self.link:
-            await self.close_link()
-        self.stop_task.set_result(True)
-        self.task.cancel()
-        self.task = None
+
+class PleaseWaitWarmly(Service):
+    name = "wait_warmly"
+
+    async def start(self):
+        context = get_context()
+        msg = Text(f"No connection to {context['app_name']}. Please standby...")
+        while True:
+            link = await context["link"]
+            conns = await context["connections"]
+            if not link and conns:
+                for v in conns.values():
+                    await v.send_line(msg)
+            await asyncio.sleep(3)

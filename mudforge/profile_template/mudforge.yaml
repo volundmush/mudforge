@@ -1,3 +1,7 @@
 classes:
-  application: "mudforge.forge.app.MudForge"
   connection: "mudforge.forge.link.Connection"
+
+services:
+  link: "mudforge.forge.link.LinkService"
+
+main_function: "mudforge.gate.app.run_gate"

@@ -1,10 +1,11 @@
 import time
-import uuid
 
-from typing import Optional, List, Union
 from enum import IntEnum
+from typing import Optional, List, Union, Dict, Tuple
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
+
+from aiomisc import get_context
+from rich.abc import RichRenderable
 from rich.color import ColorSystem
 
 UNKNOWN = "UNKNOWN"
@@ -15,22 +16,30 @@ class MudProtocol(IntEnum):
     WEBSOCKET = 1
 
     def __str__(self):
-        if self == 0:
-            return "Telnet"
-        elif self == 1:
-            return "WebSocket"
-        else:
-            return "Unknown"
+        match self:
+            case 0:
+                return "Telnet"
+            case 1:
+                return "WebSocket"
+            case _:
+                return "Unknown"
 
 
 COLOR_MAP = {
     "ansi": ColorSystem.STANDARD,
     "xterm256": ColorSystem.EIGHT_BIT,
-    "truecolor": ColorSystem.TRUECOLOR
+    "truecolor": ColorSystem.TRUECOLOR,
+    "windows": ColorSystem.WINDOWS
+}
+
+COLOR_MAP_REVERSE = {
+    ColorSystem.STANDARD: "standard",
+    ColorSystem.EIGHT_BIT: "256",
+    ColorSystem.TRUECOLOR: "truecolor",
+    ColorSystem.WINDOWS: "windows",
 }
 
 
-@dataclass_json
 @dataclass
 class ConnectionDetails:
     client_id: str
@@ -68,48 +77,129 @@ class ConnectionDetails:
     oob: bool = False
 
 
-class ConnectionInMessageType(IntEnum):
-    GAMEDATA = 0
-    CONNECT = 1
-    READY = 2
-    MSSP = 4
-    DISCONNECT = 5
-    UPDATE = 6
+class DisconnectReason(IntEnum):
+    TIMEOUT = 0
+    EOF = 1
 
 
-@dataclass_json
 @dataclass
-class ConnectionInMessage:
-    msg_type: ConnectionInMessageType
-    client_id: str
-    data: Optional[object]
-
-
-class ConnectionOutMessageType(IntEnum):
-    GAMEDATA = 0
-    MSSP = 1
-    DISCONNECT = 2
-
-
-@dataclass_json
-@dataclass
-class ConnectionOutMessage:
-    msg_type: ConnectionOutMessageType
-    client_id: Union[str, List[str]]
-    data: Optional[object]
-
-
-class LinkMessageType(IntEnum):
-    EVENTS = 0
-    HELLO = 1
-    SYSTEM = 2
-    STORE = 3
-    RETRIEVE = 4
-
-
-@dataclass_json
-@dataclass
-class LinkMessage:
-    msg_type: LinkMessageType
+class LinkMsg:
     process_id: int
-    data: Optional[object]
+
+    async def process(self):
+        pass
+
+
+@dataclass
+class ConnectionMessage(LinkMsg):
+    client_id: str
+
+
+# Messages from client to server.
+@dataclass
+class ClientInput(ConnectionMessage):
+    text: str
+
+@dataclass
+class ClientConnect(ConnectionMessage):
+    details: ConnectionDetails
+
+@dataclass
+class ClientMSSPRequest(ConnectionMessage):
+    pass
+
+@dataclass
+class ClientDisconnected(ConnectionMessage):
+    reason: DisconnectReason
+
+@dataclass
+class ClientUpdate(ConnectionMessage):
+    details: ConnectionDetails
+
+
+# Messages from server to client.
+
+class RenderMode(IntEnum):
+    TEXT = 0
+    LINE = 1
+    PROMPT = 2
+
+@dataclass
+class _ClientRender(ConnectionMessage):
+
+    async def send_renders(self, conn, messages, mode):
+        for r in messages if isinstance(messages, list) else [messages, ]:
+            match mode:
+                case RenderMode.TEXT:
+                    await conn.send_text(r)
+                case RenderMode.LINE:
+                    await conn.send_line(r)
+                case RenderMode.PROMPT:
+                    await conn.send_prompt(r)
+
+@dataclass
+class ClientRender(_ClientRender):
+    mode: RenderMode
+    data: Union[List[RichRenderable], RichRenderable]
+
+    async def process(self):
+        context = get_context()
+        conns = await context["connections"]
+        if not (conn := conns.get(self.client_id, None)):
+            return
+        await self.send_renders(conn, self.data, self.mode)
+
+@dataclass
+class ClientKick(_ClientRender):
+    message: Optional[Union[List[RichRenderable], RichRenderable]]
+
+    async def process(self):
+        context = get_context()
+        conns = await context["connections"]
+        if not (conn := conns.pop(self.client_id, None)):
+            return
+        if self.message:
+            await self.send_renders(conn, self.message, RenderMode.TEXT)
+        await conn.do_disconnect()
+
+
+# Bidirectional message.
+@dataclass
+class ClientGMCP(ConnectionMessage):
+    data: dict
+
+    async def process(self):
+        context = get_context()
+        conns = await context["connections"]
+        if not (conn := conns.get(self.client_id, None)):
+            return
+        await conn.send_gmcp(self.data)
+
+@dataclass
+class ClientMSSP(ConnectionMessage):
+    data: List[Tuple[str, str]]
+
+    async def process(self):
+        context = get_context()
+        conns = await context["connections"]
+        if not (conn := conns.get(self.client_id, None)):
+            return
+        await conn.send_mssp(self.data)
+
+
+# Link Messages between Gate and Forge
+@dataclass
+class Hello(LinkMsg):
+    clients: Optional[Dict[str, ConnectionDetails]]
+
+@dataclass
+class CopyoverStart(LinkMsg):
+    pass
+
+@dataclass
+class CopyoverComplete(LinkMsg):
+    pass
+
+@dataclass
+class Clients(LinkMsg):
+    clients: Optional[Dict[str, ConnectionDetails]]

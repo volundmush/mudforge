@@ -4,8 +4,9 @@ name: "MudForge"
 
 # TLS data - this must be paths to PEM and KEY files.
 tls:
-  pem: "cert.pem"
-  key: "cert.key"
+  ca: "ca.pem"
+  cert: "cert.pem"
+  key: "key.key"
 
 # Interfaces - Internal will be used for IPC, external for clients
 interfaces:

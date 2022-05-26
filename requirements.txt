@@ -1,5 +1,5 @@
 uvloop
-dataclasses-json
+aiomisc
 ujson
 websockets
 ruamel.yaml

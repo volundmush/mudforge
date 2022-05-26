@@ -1,51 +1,17 @@
+import os
 import time
-from mudforge.shared import (
-    ConnectionDetails,
-    ConnectionInMessageType,
-    ConnectionOutMessage,
-    ConnectionInMessage,
-    ConnectionOutMessageType,
-)
-from enum import IntEnum
+from typing import List, Tuple
 
+from rich.abc import RichRenderable
 from rich.console import Console
-from rich.color import ColorSystem
-
-
-COLOR_MAP = {
-    ColorSystem.STANDARD: "standard",
-    ColorSystem.EIGHT_BIT: "256",
-    ColorSystem.TRUECOLOR: "truecolor",
-    ColorSystem.WINDOWS: "windows",
-}
-
-
-class PrintMode(IntEnum):
-    LINE = 0
-    TEXT = 1
-    PROMPT = 2
-
-
-class StyleOptions(IntEnum):
-    BOLD = 1
-    DIM = 2
-    ITALIC = 4
-    UNDERLINE = 8
-    BLINK = 16
-    BLINK2 = 32
-    REVERSE = 64
-    CONCEAL = 128
-    STRIKE = 256
-    UNDERLINE2 = 512
-    FRAME = 1024
-    ENCIRCLE = 2048
-    OVERLINE = 4096
+from aiomisc import get_context
+from mudforge.shared import ConnectionDetails, ClientConnect
 
 
 class MudConnection:
-    listener = None
 
-    def __init__(self, details: ConnectionDetails):
+    def __init__(self, service, details: ConnectionDetails):
+        self.service = service
         details.connected = time.time()
         self.running: bool = False
         self.started: bool = False
@@ -56,7 +22,7 @@ class MudConnection:
         self.server_data = None
 
     @property
-    def conn_id(self):
+    def conn_id(self) -> str:
         return self.details.client_id
 
     def write(self, b: str):
@@ -68,44 +34,37 @@ class MudConnection:
         as a file.
         """
 
-    def print(self, *args, **kwargs):
+    def print(self, *args, **kwargs) -> str:
         self.console.print(*args, highlight=False, **kwargs)
         return self.do_print()
 
-    def do_print(self):
+    def do_print(self) -> str:
         return self.console.export_text(clear=True, styles=True)
 
-    async def process_out_event(self, ev: ConnectionOutMessage):
-        match ev.msg_type:
-            case ConnectionOutMessageType.GAMEDATA:
-                await self.process_out_gamedata(ev)
-            case ConnectionOutMessageType.MSSP:
-                await self.process_out_mssp(ev)
-            case ConnectionOutMessageType.DISCONNECT:
-                await self.process_out_disconnect(ev)
-
-    async def process_out_gamedata(self, ev: ConnectionOutMessage):
-        proc_name = ev.data.get("processor", "").lower() if ev.data else ""
-        if (proc := self.listener.app.processors.get(proc_name, None)):
-            await proc.process(self, ev.data.get("data", list()) if ev.data else list())
-
-    async def process_out_mssp(self, ev: ConnectionOutMessage):
+    async def send_prompt(self, data: RichRenderable):
         pass
 
-    async def process_out_disconnect(self, ev: ConnectionOutMessage):
-        self.listener.app.remove_connection(self.details.client_id)
-        await self.do_disconnect()
+    async def send_line(self, data: RichRenderable):
+        pass
+
+    async def send_text(self, data: RichRenderable):
+        pass
+
+    async def send_gmcp(self, cmd: str, *args, **kwargs):
+        pass
+
+    async def send_mssp(self, mssp: List[Tuple[str, str]]):
+        pass
+
+    async def on_kick(self):
+        pass
 
     def do_disconnect(self):
         pass
 
     def on_start(self):
         self.started = True
-        self.in_events.append(
-            ConnectionInMessage(
-                ConnectionInMessageType.READY, self.conn_id, self.details
-            )
-        )
+        self.in_events.append(ClientConnect(process_id=os.getpid(), client_id=self.conn_id, details=self.details))
 
     def check_ready(self):
         pass
