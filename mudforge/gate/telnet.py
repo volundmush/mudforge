@@ -40,8 +40,11 @@ class TelnetMudConnection(MudConnection):
             self.process_telnet_events()
 
     async def run_start(self):
-        handshakes = asyncio.gather(*[holder.is_ready() for holder in self.telnet.handlers.values()])
-        await asyncio.wait_for(handshakes, 0.2)
+        try:
+            handshakes = asyncio.gather(*[handler.is_ready() for handler in self.telnet.handlers.values()])
+            await asyncio.wait_for(handshakes, 0.5)
+        except asyncio.TimeoutError as err:
+            pass
         self.on_start()
 
     async def data_received(self, data: bytearray):

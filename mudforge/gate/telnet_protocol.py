@@ -224,14 +224,13 @@ class TelnetOptionHandler:
         self.remote = TelnetOptionPerspective()
 
     def ready(self):
-        return ((self.local.enabled and self.support_local) or
-                (self.remote.enabled and self.support_remote)) and self.special_ready()
+        return (self.local.heard_answer or self.remote.heard_answer) and self.special_ready()
 
     def special_ready(self):
         return True
 
     async def is_ready(self):
-        while not self.ready:
+        while not self.ready():
             await asyncio.sleep(0.05)
         return True
 
@@ -248,6 +247,7 @@ class TelnetOptionHandler:
         callback,
         section,
     ):
+        state.heard_answer = True
         if support:
             if state.negotiating:
                 state.negotiating = False
@@ -257,7 +257,7 @@ class TelnetOptionHandler:
                     imsg.changed[section][self.opname] = True
                     callback(imsg)
             else:
-                self.remote.enabled = True
+                state.enabled = True
                 imsg.protocol.send_negotiate(ack, self.opcode, imsg)
                 imsg.changed[section][self.opname] = True
                 callback(imsg)
@@ -267,6 +267,7 @@ class TelnetOptionHandler:
     def _reject(
         self, imsg: _InternalMsg, state: TelnetOptionPerspective, callback, section
     ):
+        state.heard_answer = True
         if state.enabled:
             imsg.changed[section][self.opname] = False
             callback(imsg)
@@ -385,6 +386,7 @@ class MTTSHandler(TelnetOptionHandler):
             elif self.stage == 1:
                 self.receive_stage_1(data, imsg)
                 self.stage = 2
+                self.request(imsg)
             elif self.stage == 2:
                 self.receive_stage_2(data, imsg)
                 self.stage = 3
@@ -463,7 +465,7 @@ class MTTSHandler(TelnetOptionHandler):
                     capability: True
                     for bitval, capability in self.mtts
                     if option & bitval > 0
-                }:
+                }.items():
                     imsg.changed["mtts"][k] = v
             else:
                 # some clients send erroneous MTTS as a string. Add directly.

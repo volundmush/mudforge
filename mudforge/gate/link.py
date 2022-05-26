@@ -92,11 +92,12 @@ class PleaseWaitWarmly(Service):
 
     async def start(self):
         context = get_context()
-        msg = Text(f"No connection to {context['app_name']}. Please standby...")
+        name = await context["app_name"]
+        msg = Text(f"No connection to {name}. Please standby...")
+        conns = await context["connections"]
         while True:
             link = await context["link"]
-            conns = await context["connections"]
             if not link and conns:
                 for v in conns.values():
                     await v.send_line(msg)
-            await asyncio.sleep(3)
+            await asyncio.sleep(15)
