@@ -146,7 +146,7 @@ class TelnetMudConnection(MudConnection):
 
         self.console._mxp = self.details.mxp_active
         self.console._color_system = self.details.color
-        self.console._width = self.details.width
+        self.console.options.update(width=self.details.width, height=self.details.height)
 
     def telnet_in_to_conn_in(self, ev: TelnetInMessage):
         match ev.msg_type:

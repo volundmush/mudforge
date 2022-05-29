@@ -217,7 +217,7 @@ def partial_match(
             return candidate
 
 
-def generate_name(prefix: str, existing, gen_length: int = 20):
+def generate_name(prefix: str, existing, gen_length: int = 20) -> str:
     def gen():
         return f"{prefix}_{''.join(random.choices(string.ascii_letters + string.digits, k=gen_length))}"
 

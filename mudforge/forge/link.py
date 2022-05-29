@@ -7,34 +7,62 @@ from rich.text import Text
 from rich.abc import RichRenderable
 
 from websockets import client as ws_client, WebSocketException
-from mudforge.shared import ConnectionDetails, ClientRender, RenderMode
+from mudforge.shared import ConnectionDetails, ClientRender, RenderMode, DisconnectReason
 
 
 class Connection:
 
     def __init__(self, details: ConnectionDetails):
+        # self.details holds the details about the connection type.
         self.details = details
+
+        # The input and output queues store Message objects found in mudgate.shared
         self.pending_input = asyncio.Queue()
         self.pending_output = asyncio.Queue()
+
+        # The all-important asyncio Task which operates this connection.
         self.task = None
 
+        # If the connection is to be disconnected, the reason will be stored here for the purposes of on_stop hook.
+        self.reason: DisconnectReason = None
+
     def start(self):
+        """
+        Start up the Connection.
+        You should never call this manually. It's called by GameService when it receives a message with a new Client.
+        """
         if self.task:
             return
-        print(f"Connection starting...")
         self.task = asyncio.create_task(self.run())
 
     async def run(self):
-        print(f"Connection running!")
-        await self.process_start()
-        await asyncio.gather(self.process_input(), self.process_output())
-        print(f"Connection stopped running!")
+        """
+        The guts of the asyncio Task's job.
+        Never call this manually!
+        """
+        try:
+            await self.on_start()
+            await asyncio.gather(self.process_input(), self.process_output())
+        except asyncio.CancelledError as err:
+            await self.on_stop()
+            raise err
 
-    async def process_start(self):
-        pass
+    async def on_start(self):
+        """
+        Hook that's called before the Connection begins to do anything important. No input or output will be handled
+        until this completes.
+        """
+
+    async def on_stop(self):
+        """
+        Called by the Connection Task during the connection shutdown process.
+        Whatever you put here, do it quickly and don't block the connection shutdown.
+        """
 
     async def process_input(self):
-        print(f"connection processing input!")
+        """
+        The half of the Task that processes messages sent from the client.
+        """
         while True:
             data = await self.pending_input.get()
             if isinstance(data, str):
@@ -42,35 +70,55 @@ class Connection:
             elif isinstance(data, dict):
                 await self.process_input_gmcp(data)
 
-    async def process_input_text(self, data):
-        print(f"Received from {self.details.client_id}: {data}")
+    async def process_input_text(self, data: str):
+        """
+        Called when the connection has received text input.
+        Replace this to do something different in production.
+        """
         echo = Text("ECHO: ")
         echo = echo.append(data)
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.LINE, data=echo))
 
-    async def process_input_gmcp(self, data):
-        pass
+    async def process_input_gmcp(self, data: dict):
+        """
+        Called when the connection receives GMCP data as a dictionary.
+        Currently does nothing.
+        Replace this to do something different in production.
+        """
 
     async def process_output(self):
-        print(f"connection processing output!")
+        """
+        The half of the Task that handles messages that should be sent to the client.
+        They go here first instead of straight to the outbox so that disconnects can supersede pending messages.
+        """
         context = get_context()
         inbox = await context["link_inbox"]
 
         while True:
             msg = await self.pending_output.get()
-            print(f"{self.details.client_id} putting in inbox: {msg}")
             await inbox.put(msg)
 
     async def send_line(self, text: RichRenderable):
+        """
+        Sends a 'line' to the client. A line will append a newline at the tail end of whatever's included, if there is
+        not already a new line there.
+        """
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.LINE, data=text))
 
     async def send_text(self, text: RichRenderable):
+        """
+        Send just 'text' to the client. This is like sending a line but it won't automatically append a newline
+        if you forgot one.
+        """
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.TEXT, data=text))
 
     async def send_prompt(self, text: RichRenderable):
+        """
+        Send a 'prompt' to the client. This will be handled appropriately for its connection type.
+        """
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.PROMPT, data=text))
 
@@ -82,7 +130,6 @@ class Link:
         self.ws = ws
         self.task = None
 
-
     async def run(self):
         await self.on_connect()
         self.task = asyncio.create_task(self.run_do())
@@ -92,7 +139,7 @@ class Link:
         await asyncio.gather(self.read(), self.write())
 
     async def on_connect(self):
-        return
+        pass
 
     async def close(self):
         self.ws.close()
@@ -108,7 +155,6 @@ class Link:
 
     async def process_bytes(self, data):
         msg = pickle.loads(data)
-        print(f"Forge Received: {msg}")
         await msg.process_forge()
 
     async def process_str(self, data):
@@ -119,7 +165,6 @@ class Link:
         inbox = await context["link_inbox"]
         while True:
             msg = await inbox.get()
-            print(f"Forge Sending: {msg}")
             await self.ws.send(pickle.dumps(msg))
 
     async def register_connection(self, details):

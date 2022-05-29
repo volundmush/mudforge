@@ -25,6 +25,9 @@ class GameService(Service):
         self.current_tick = 0
 
     async def start(self):
+        """
+        Just yanking some useful things out of the context.
+        """
         context = get_context()
         self.connections = await context["connections"]
         self.classes = await context["classes"]
@@ -32,6 +35,7 @@ class GameService(Service):
         self.config = await context["config"]
         self.tick_rate = self.config.get("tick_rate", 0.1)
 
+        # This will ensure that the game loop is called at most once every tick-rate, approximately.
         while True:
             self.run_start = time.monotonic()
             await self.process_pending_disconnects()
@@ -51,17 +55,18 @@ class GameService(Service):
     async def process_pending_disconnects(self):
         for k, v in self.pending_disconnections:
             if (conn := self.connections.get(k, None)):
-                conn.process_disconnect(v)
+                await conn.disconnect(v)
                 self.connections.pop(k, None)
         self.pending_disconnections.clear()
 
     async def process_pending_connections(self):
         for k, v in self.pending_connections.items():
             if (conn := self.connections.get(k, None)):
-                conn.update_details(v)
+                await conn.update_details(v)
                 continue
             conn = self.classes["connection"](v)
             self.connections[k] = conn
-            print(f"starting {k}")
+
+            # This will start up the new task on the connection.
             conn.start()
         self.pending_connections.clear()

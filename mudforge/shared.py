@@ -14,6 +14,7 @@ UNKNOWN = "UNKNOWN"
 class MudProtocol(IntEnum):
     TELNET = 0
     WEBSOCKET = 1
+    SSH = 2
 
     def __str__(self):
         match self:
@@ -21,6 +22,8 @@ class MudProtocol(IntEnum):
                 return "Telnet"
             case 1:
                 return "WebSocket"
+            case 2:
+                return "SSH"
             case _:
                 return "Unknown"
 

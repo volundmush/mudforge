@@ -57,7 +57,6 @@ class Link:
         inbox = await context["link_inbox"]
         while True:
             msg = await inbox.get()
-            print(f"Gate Sending Message: {msg}")
             await self.ws.send(pickle.dumps(msg))
 
 

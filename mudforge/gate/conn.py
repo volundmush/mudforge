@@ -5,7 +5,7 @@ from typing import List, Tuple
 from rich.abc import RichRenderable
 from rich.console import Console
 from aiomisc import get_context
-from mudforge.shared import ConnectionDetails, ClientConnect
+from mudforge.shared import ConnectionDetails, ClientConnect, DisconnectReason, MudProtocol
 
 
 class MudConnection:
@@ -26,7 +26,10 @@ class MudConnection:
         return self.details.client_id
 
     def write(self, b: str):
-        pass
+        """
+        When self.console.print() is called, it writes output to here.
+        Not necessarily useful, but it ensures console print doesn't end up sent out stdout or etc.
+        """
 
     def flush(self):
         """
@@ -35,32 +38,41 @@ class MudConnection:
         """
 
     def print(self, *args, **kwargs) -> str:
+        """
+        A thin wrapper around Rich.Console's print. Returns the exported data.
+        """
         self.console.print(*args, highlight=False, **kwargs)
-        return self.do_print()
+        match self.details.protocol:
+            case MudProtocol.TELNET | MudProtocol.SSH:
+                return self.do_print_ansi()
+            case MudProtocol.WEBSOCKET:
+                return self.do_print_html()
 
-    def do_print(self) -> str:
-        captured = self.console.export_text(clear=True, styles=True)
-        return captured
+    def do_print_ansi(self) -> str:
+        return self.console.export_text(clear=True, styles=True)
+
+    def do_print_html(self):
+        return self.console.export_html(clear=True, styles=True)
 
     async def send_prompt(self, data: RichRenderable):
-        pass
+        return NotImplemented
 
     async def send_line(self, data: RichRenderable):
-        pass
+        return NotImplemented
 
     async def send_text(self, data: RichRenderable):
-        pass
+        return NotImplemented
 
     async def send_gmcp(self, cmd: str, *args, **kwargs):
-        pass
+        return NotImplemented
 
     async def send_mssp(self, mssp: List[Tuple[str, str]]):
-        pass
+        return NotImplemented
 
     async def on_kick(self):
         pass
 
-    def do_disconnect(self):
+    async def disconnect(self, reason: DisconnectReason):
         pass
 
     def on_start(self):
@@ -78,3 +90,16 @@ class MudConnection:
 
     async def send_mssp_data(self, **kwargs):
         pass
+
+    async def update_details(self, details: ConnectionDetails):
+        """
+        Called whenever connection details changes. Don't overload this - overload on_update_details.
+        """
+        old_details = self.details
+        self.details = details
+        await self.on_update_details(old_details, details)
+
+    async def on_update_details(self, old: ConnectionDetails, new: ConnectionDetails):
+        """
+        Simple hook to react to any changes in connection details, such as a color reconfigure.
+        """
