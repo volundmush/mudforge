@@ -80,13 +80,24 @@ class ConnectionDetails:
 class DisconnectReason(IntEnum):
     TIMEOUT = 0
     EOF = 1
+    KICK = 2
+    QUIT = 3
 
 
 @dataclass
 class LinkMsg:
     process_id: int
 
-    async def process(self):
+    async def process_gate(self):
+        pass
+
+    async def process_forge(self):
+        pass
+
+    async def on_send_forge(self):
+        pass
+
+    async def on_send_gate(self):
         pass
 
 
@@ -100,17 +111,32 @@ class ConnectionMessage(LinkMsg):
 class ClientInput(ConnectionMessage):
     text: str
 
+    async def process_forge(self):
+        context = get_context()
+        connections = await context["connections"]
+        if (conn := connections.get(self.client_id, None)):
+            await conn.pending_input.put(self.text)
+
 @dataclass
 class ClientConnect(ConnectionMessage):
     details: ConnectionDetails
+
+    async def process_forge(self):
+        context = get_context()
+        services = await context["services"]
+        game = services["game"]
+        game.pending_connections[self.client_id] = self.details
+
 
 @dataclass
 class ClientMSSPRequest(ConnectionMessage):
     pass
 
+
 @dataclass
 class ClientDisconnected(ConnectionMessage):
     reason: DisconnectReason
+
 
 @dataclass
 class ClientUpdate(ConnectionMessage):
@@ -123,6 +149,7 @@ class RenderMode(IntEnum):
     TEXT = 0
     LINE = 1
     PROMPT = 2
+
 
 @dataclass
 class _ClientRender(ConnectionMessage):
@@ -137,23 +164,24 @@ class _ClientRender(ConnectionMessage):
                 case RenderMode.PROMPT:
                     await conn.send_prompt(r)
 
+
 @dataclass
 class ClientRender(_ClientRender):
     mode: RenderMode
     data: Union[List[RichRenderable], RichRenderable]
 
-    async def process(self):
+    async def process_gate(self):
         context = get_context()
         conns = await context["connections"]
-        if not (conn := conns.get(self.client_id, None)):
-            return
-        await self.send_renders(conn, self.data, self.mode)
+        if (conn := conns.get(self.client_id, None)):
+            await self.send_renders(conn, self.data, self.mode)
+
 
 @dataclass
 class ClientKick(_ClientRender):
     message: Optional[Union[List[RichRenderable], RichRenderable]]
 
-    async def process(self):
+    async def process_gate(self):
         context = get_context()
         conns = await context["connections"]
         if not (conn := conns.pop(self.client_id, None)):
@@ -175,6 +203,7 @@ class ClientGMCP(ConnectionMessage):
             return
         await conn.send_gmcp(self.data)
 
+
 @dataclass
 class ClientMSSP(ConnectionMessage):
     data: List[Tuple[str, str]]
@@ -192,13 +221,22 @@ class ClientMSSP(ConnectionMessage):
 class Hello(LinkMsg):
     clients: Optional[Dict[str, ConnectionDetails]]
 
+    async def process_forge(self):
+        context = get_context()
+        services = await context["services"]
+        game = services["game"]
+        game.pending_connections.update(self.clients)
+
+
 @dataclass
 class CopyoverStart(LinkMsg):
     pass
 
+
 @dataclass
 class CopyoverComplete(LinkMsg):
     pass
+
 
 @dataclass
 class Clients(LinkMsg):

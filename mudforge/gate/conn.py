@@ -39,7 +39,8 @@ class MudConnection:
         return self.do_print()
 
     def do_print(self) -> str:
-        return self.console.export_text(clear=True, styles=True)
+        captured = self.console.export_text(clear=True, styles=True)
+        return captured
 
     async def send_prompt(self, data: RichRenderable):
         pass

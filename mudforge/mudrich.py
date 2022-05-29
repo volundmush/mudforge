@@ -290,15 +290,10 @@ class MudConsole(OLD_CONSOLE):
         append = output.append
         color_system = self._color_system
         legacy_windows = self.legacy_windows
-        if self.record:
-            with self._record_buffer_lock:
-                self._record_buffer.extend(buffer)
         not_terminal = not self.is_terminal
         if self.no_color and color_system:
             buffer = Segment.remove_color(buffer)
         for text, style, control in buffer:
-            if self._mxp or self._pueblo:
-                text = html.escape(text)
             if style:
                 append(
                     style.render(
@@ -315,7 +310,6 @@ class MudConsole(OLD_CONSOLE):
 
         rendered = "".join(output)
         return rendered
-
 
 class MudText(OLD_TEXT):
 
@@ -560,48 +554,6 @@ class MudText(OLD_TEXT):
                 out.append(self[match.start(): match.end()])
             return self.__class__(" ").join(out)
 
-        @classmethod
-        def assemble(
-                cls,
-                *parts: Union[str, "Text", Tuple[str, StyleType]],
-                style: Union[str, Style] = "",
-                justify: Optional["JustifyMethod"] = None,
-                overflow: Optional["OverflowMethod"] = None,
-                no_wrap: Optional[bool] = None,
-                end: str = "\n",
-                tab_size: int = 8,
-                meta: Optional[Dict[str, Any]] = None,
-        ) -> "Text":
-            """Construct a text instance by combining a sequence of strings with optional styles.
-            The positional arguments should be either strings, or a tuple of string + style.
-            Args:
-                style (Union[str, Style], optional): Base style for text. Defaults to "".
-                justify (str, optional): Justify method: "left", "center", "full", "right". Defaults to None.
-                overflow (str, optional): Overflow method: "crop", "fold", "ellipsis". Defaults to None.
-                end (str, optional): Character to end text with. Defaults to "\\\\n".
-                tab_size (int): Number of spaces per tab, or ``None`` to use ``console.tab_size``. Defaults to 8.
-                meta (Dict[str, Any], optional). Meta data to apply to text, or None for no meta data. Default to None
-            Returns:
-                Text: A new text instance.
-            """
-            text = cls(
-                style=style,
-                justify=justify,
-                overflow=overflow,
-                no_wrap=no_wrap,
-                end=end,
-                tab_size=tab_size,
-            )
-            append = text.append
-            _Text = cls
-            for part in parts:
-                if isinstance(part, (_Text, str)):
-                    append(part)
-                else:
-                    append(*part)
-            if meta:
-                text.apply_meta(meta)
-            return
 
 DEFAULT_STYLES = dict()
 

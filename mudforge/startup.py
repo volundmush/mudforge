@@ -1,4 +1,5 @@
 import os
+import asyncio
 import setproctitle
 
 import logging
@@ -28,6 +29,7 @@ async def pre_start(entrypoint=None, services=None):
     context["config"] = CONFIG
     context["shared"] = SHARED
     context["app_name"] = SHARED.get("name", "MudForge")
+    context["link_inbox"] = asyncio.Queue()
     if (func_path := CONFIG.get("hooks", dict()).get("pre_start", None)):
         func = import_from_module(func_path)
         await func(entrypoint, services)

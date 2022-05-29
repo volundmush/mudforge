@@ -175,6 +175,7 @@ class TelnetMudConnection(MudConnection):
     }
 
     async def send_line(self, data: RichRenderable):
+
         rendered = self.print(data)
         await self.send_telnet_out(TelnetOutMessage(TelnetOutMessageType.LINE, rendered))
 

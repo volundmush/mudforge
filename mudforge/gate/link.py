@@ -40,9 +40,9 @@ class Link:
 
     async def read(self):
         async for message in self.ws:
-            if isinstance(message.__class__, str):
+            if isinstance(message, str):
                 await self.process_str(message)
-            elif isinstance(message.__class__, bytes):
+            elif isinstance(message, bytes):
                 await self.process_bytes(message)
 
     async def process_str(self, msg_text):
@@ -50,8 +50,7 @@ class Link:
 
     async def process_bytes(self, msg_text):
         msg = pickle.loads(msg_text)
-        if isinstance(msg, LinkMsg):
-            await msg.process(self.service.app)
+        await msg.process_gate()
 
     async def write(self):
         context = get_context()
@@ -66,7 +65,6 @@ class LinkService(Service):
 
     async def start(self):
         context = get_context()
-        context["link_inbox"] = asyncio.Queue()
         context["link"] = None
         shared = await context["shared"]
         interface = shared["interfaces"]["internal"]

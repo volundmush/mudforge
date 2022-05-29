@@ -3,5 +3,6 @@ classes:
 
 services:
   link: "mudforge.forge.link.LinkService"
+  game: "mudforge.forge.game.GameService"
 
 main_function: "mudforge.gate.app.run_gate"

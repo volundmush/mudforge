@@ -1,14 +1,78 @@
+import os
 import asyncio
 import pickle
-
+from typing import Any
 from aiomisc import Service, get_context
+from rich.text import Text
+from rich.abc import RichRenderable
 
 from websockets import client as ws_client, WebSocketException
-from mudforge.shared import ConnectionDetails
+from mudforge.shared import ConnectionDetails, ClientRender, RenderMode
 
 
 class Connection:
-    pass
+
+    def __init__(self, details: ConnectionDetails):
+        self.details = details
+        self.pending_input = asyncio.Queue()
+        self.pending_output = asyncio.Queue()
+        self.task = None
+
+    def start(self):
+        if self.task:
+            return
+        print(f"Connection starting...")
+        self.task = asyncio.create_task(self.run())
+
+    async def run(self):
+        print(f"Connection running!")
+        await self.process_start()
+        await asyncio.gather(self.process_input(), self.process_output())
+        print(f"Connection stopped running!")
+
+    async def process_start(self):
+        pass
+
+    async def process_input(self):
+        print(f"connection processing input!")
+        while True:
+            data = await self.pending_input.get()
+            if isinstance(data, str):
+                await self.process_input_text(data)
+            elif isinstance(data, dict):
+                await self.process_input_gmcp(data)
+
+    async def process_input_text(self, data):
+        print(f"Received from {self.details.client_id}: {data}")
+        echo = Text("ECHO: ")
+        echo = echo.append(data)
+        await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
+                                                   mode=RenderMode.LINE, data=echo))
+
+    async def process_input_gmcp(self, data):
+        pass
+
+    async def process_output(self):
+        print(f"connection processing output!")
+        context = get_context()
+        inbox = await context["link_inbox"]
+
+        while True:
+            msg = await self.pending_output.get()
+            print(f"{self.details.client_id} putting in inbox: {msg}")
+            await inbox.put(msg)
+
+    async def send_line(self, text: RichRenderable):
+        await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
+                                                   mode=RenderMode.LINE, data=text))
+
+    async def send_text(self, text: RichRenderable):
+        await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
+                                                   mode=RenderMode.TEXT, data=text))
+
+    async def send_prompt(self, text: RichRenderable):
+        await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
+                                                   mode=RenderMode.PROMPT, data=text))
 
 
 class Link:
@@ -17,6 +81,7 @@ class Link:
         self.service = service
         self.ws = ws
         self.task = None
+
 
     async def run(self):
         await self.on_connect()
@@ -43,8 +108,8 @@ class Link:
 
     async def process_bytes(self, data):
         msg = pickle.loads(data)
-        print(f"Forge Handling Message: {msg}")
-        await msg.process()
+        print(f"Forge Received: {msg}")
+        await msg.process_forge()
 
     async def process_str(self, data):
         pass
@@ -54,6 +119,7 @@ class Link:
         inbox = await context["link_inbox"]
         while True:
             msg = await inbox.get()
+            print(f"Forge Sending: {msg}")
             await self.ws.send(pickle.dumps(msg))
 
     async def register_connection(self, details):
