@@ -69,7 +69,7 @@ setup(
     ],
     python_requires=">=3.10",
     project_urls={
-        "Source": "https://github.com/volundmush/adventkai",
-        "Issue tracker": "https://github.com/volundmush/adventkai/issues",
+        "Source": "https://github.com/volundmush/mudforge",
+        "Issue tracker": "https://github.com/volundmush/mudforge/issues",
     },
 )

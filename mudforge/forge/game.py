@@ -34,6 +34,7 @@ class GameService(Service):
         self.services = await context["services"]
         self.config = await context["config"]
         self.tick_rate = self.config.get("tick_rate", 0.1)
+        await self.on_start()
 
         # This will ensure that the game loop is called at most once every tick-rate, approximately.
         while True:
@@ -45,6 +46,9 @@ class GameService(Service):
             self.run_stop = time.monotonic()
             delta = self.run_stop - self.run_start
             await asyncio.sleep(max(self.tick_rate-delta, 0))
+
+    async def on_start(self):
+        pass
 
     async def game_loop(self):
         if (self.current_tick % 100) == 0:
