@@ -1,13 +1,25 @@
 import os
 import asyncio
 import pickle
-from typing import Any
+import logging
+from typing import Any, Union
 from aiomisc import Service, get_context
 from rich.text import Text
 from rich.abc import RichRenderable
 
 from websockets import client as ws_client, WebSocketException
 from mudforge.shared import ConnectionDetails, ClientRender, RenderMode, DisconnectReason
+
+
+def _handle_connection_task_finish(task: asyncio.Task):
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        print(f"{task.get_name()} had an exception!")
+        logging.exception(f"Exception raised by task: {task.get_name()}")
+
 
 
 class Connection:
@@ -22,6 +34,8 @@ class Connection:
 
         # The all-important asyncio Task which operates this connection.
         self.task = None
+        self._started_ran = False
+        self._exceptions = 0
 
         # If the connection is to be disconnected, the reason will be stored here for the purposes of on_stop hook.
         self.reason: DisconnectReason = None
@@ -33,7 +47,7 @@ class Connection:
         """
         if self.task:
             return
-        self.task = asyncio.create_task(self.run())
+        self.task = asyncio.create_task(self.run(), name=self.details.client_id)
 
     async def run(self):
         """
@@ -41,11 +55,23 @@ class Connection:
         Never call this manually!
         """
         try:
-            await self.on_start()
+            if not self._started_ran:
+                self._started_ran = True
+                await self.on_start()
             await asyncio.gather(self.process_input(), self.process_output())
         except asyncio.CancelledError as err:
-            await self.on_stop()
+            self.on_stop()
             raise err
+        except Exception as err2:
+            logging.exception(f"Exception raised by connection: {self.details.client_id}")
+            if self._exceptions <= 10:
+                self._exceptions += 1
+                logging.info(f"Restarting connection {self.details.client_id}. It has {self._exceptions} exceptions.")
+                self.task = asyncio.create_task(self.run(), name=self.details.client_id)
+            else:
+                logging.info(f"Connection {self.details.client_id} has exceeded the exception limit, canceling...")
+                self.task.cancel()
+
 
     async def on_start(self):
         """
@@ -53,11 +79,12 @@ class Connection:
         until this completes.
         """
 
-    async def on_stop(self):
+    def on_stop(self):
         """
         Called by the Connection Task during the connection shutdown process.
         Whatever you put here, do it quickly and don't block the connection shutdown.
         """
+        print(f"This is a test of the stop process. does it work?")
 
     async def process_input(self):
         """
@@ -99,26 +126,32 @@ class Connection:
             msg = await self.pending_output.get()
             await inbox.put(msg)
 
-    async def send_line(self, text: RichRenderable):
+    async def send_line(self, text: Union[str, RichRenderable]):
         """
         Sends a 'line' to the client. A line will append a newline at the tail end of whatever's included, if there is
         not already a new line there.
         """
+        if isinstance(text, str):
+            text = Text(text)
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.LINE, data=text))
 
-    async def send_text(self, text: RichRenderable):
+    async def send_text(self, text: Union[str, RichRenderable]):
         """
         Send just 'text' to the client. This is like sending a line but it won't automatically append a newline
         if you forgot one.
         """
+        if isinstance(text, str):
+            text = Text(text)
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.TEXT, data=text))
 
-    async def send_prompt(self, text: RichRenderable):
+    async def send_prompt(self, text: Union[str, RichRenderable]):
         """
         Send a 'prompt' to the client. This will be handled appropriately for its connection type.
         """
+        if isinstance(text, str):
+            text = Text(text)
         await self.pending_output.put(ClientRender(process_id=os.getpid(), client_id=self.details.client_id,
                                                    mode=RenderMode.PROMPT, data=text))
 

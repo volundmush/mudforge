@@ -21,6 +21,7 @@ class GameService(Service):
         self.run_start = 0
         self.run_stop = 0
         self.config = dict()
+        self.shared = dict()
         self.tick_rate = 0.1
         self.current_tick = 0
 
@@ -32,6 +33,7 @@ class GameService(Service):
         self.connections = await context["connections"]
         self.classes = await context["classes"]
         self.services = await context["services"]
+        self.shared = await context["shared"]
         self.config = await context["config"]
         self.tick_rate = self.config.get("tick_rate", 0.1)
         await self.on_start()

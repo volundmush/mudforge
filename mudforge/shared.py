@@ -18,11 +18,11 @@ class MudProtocol(IntEnum):
 
     def __str__(self):
         match self:
-            case 0:
+            case MudProtocol.TELNET:
                 return "Telnet"
-            case 1:
+            case MudProtocol.WEBSOCKET:
                 return "WebSocket"
-            case 2:
+            case MudProtocol.SSH:
                 return "SSH"
             case _:
                 return "Unknown"
