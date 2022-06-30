@@ -1,8 +1,9 @@
 import os
 import sys
-from setuptools import setup
+from setuptools import setup, find_packages
 
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
 OS_WINDOWS = os.name == "nt"
 
 
@@ -36,6 +37,22 @@ def get_scripts():
         return [os.path.join("bin", "unix", "mudforge")]
 
 
+def package_data():
+    """
+    By default, the distribution tools ignore all non-python files.
+    Make sure we get everything.
+    """
+    file_set = []
+    for root, dirs, files in os.walk("mudforge"):
+        for f in files:
+            if ".git" in f.split(os.path.normpath(os.path.join(root, f))):
+                # Prevent the repo from being added.
+                continue
+            file_name = os.path.relpath(os.path.join(root, f), "mudforge")
+            file_set.append(file_name)
+    return file_set
+
+
 from os import path
 
 this_directory = path.abspath(path.dirname(__file__))
@@ -53,7 +70,8 @@ setup(
     license="LGPL",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=["mudforge",],
+    packages=find_packages(),
+    package_data={"": package_data()},
     install_requires=get_requirements(),
     zip_safe=False,
     scripts=get_scripts(),

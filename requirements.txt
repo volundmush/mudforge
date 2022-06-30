@@ -4,4 +4,5 @@ ujson
 websockets
 ruamel.yaml
 rich
+mudrich
 setproctitle

@@ -15,10 +15,9 @@ import shlex
 import signal
 
 import mudforge
-from .utils import partial_match
 
-from mudforge.mudrich import install as install_rich
-install_rich()
+from mudrich import install_mudrich
+install_mudrich()
 from rich.traceback import install as install_tb
 install_tb(show_locals=True)
 from rich.console import Console
@@ -47,15 +46,14 @@ class Launcher:
             os.path.abspath(os.path.dirname(mudforge.__file__)), "profile_template"
         )
     )
-    application_names = ["mudgate", "mudforge"]
     env_vars = dict()
+    pidfile = "server.pid"
 
     def __init__(self):
         """
         The parser is created during init and an operations map created.
         """
         self.parser = self.create_parser()
-        self.applications = []
         self.choices = ["start", "stop", "kill", "noop"]
         self.operations = {
             "_noop": self.operation_noop,
@@ -82,10 +80,6 @@ class Launcher:
             help="Used to create a new game profile folder."
         )
         parser.add_argument(
-            "-a", "--app", nargs=1, action="store", dest="app", metavar="<app>",
-            help="The application to operate on. Choices: mudgate, mudforge. Used for starting/stopping just one."
-        )
-        parser.add_argument(
             "-l", "--log", nargs=1, action="store", dest="log_level", metavar="<log level>", default="20",
             help="The logging level. Events at this level or higher will be written to log. See Python's log levels. Default is 20."
         )
@@ -102,7 +96,7 @@ class Launcher:
         )
         return parser
 
-    def ensure_running(self, app: str):
+    def ensure_running(self):
         """
         Checks whether a named app is running.
 
@@ -112,22 +106,22 @@ class Launcher:
         Raises:
             ValueError (str): If the app is not running.
         """
-        pidfile = os.path.join(os.getcwd(), f"{app}.pid")
+        pidfile = os.path.join(os.getcwd(), self.pidfile)
         if not os.path.exists(pidfile):
-            raise ValueError(f"Process {app} is not running!")
+            raise ValueError(f"{self.name} is not running!")
         with open(pidfile, "r") as p:
             if not (pid := int(p.read())):
-                raise ValueError(f"Process pid for {app} corrupted.")
+                raise ValueError(f"Process pid for {self.name} corrupted.")
         try:
             # This doesn't actually do anything except verify that the process exists.
             os.kill(pid, 0)
         except OSError:
-            console.print(f"Process ID for {app} seems stale. Removing stale pidfile.")
+            console.print(f"Process ID for {self.name} seems stale. Removing stale pidfile.")
             os.remove(pidfile)
             return False
         return True
 
-    def ensure_stopped(self, app: str):
+    def ensure_stopped(self):
         """
         Checks whether a named app is not running.
 
@@ -137,12 +131,12 @@ class Launcher:
         Raises:
             ValueError (str): If the app is running.
         """
-        pidfile = os.path.join(os.getcwd(), f"{app}.pid")
+        pidfile = os.path.join(os.getcwd(), self.pidfile)
         if not os.path.exists(pidfile):
             return True
         with open(pidfile, "r") as p:
             if not (pid := int(p.read())):
-                raise ValueError(f"Process pid for {app} corrupted.")
+                raise ValueError(f"Process pid for {self.name} corrupted.")
         try:
             os.kill(pid, 0)
         except OSError:
@@ -151,39 +145,35 @@ class Launcher:
 
     def set_profile_path(self, args):
         cur_dir = os.getcwd()
-        if not os.path.exists(os.path.join(cur_dir, "shared.yaml")):
+        if not os.path.exists(os.path.join(cur_dir, "config.yaml")):
             raise ValueError(f"Current directory is not a valid {self.name} profile!")
         self.profile_path = cur_dir
 
     def operation_start(self, op, args, unknown):
-        for app in self.applications:
-            if not self.ensure_stopped(app):
-                raise ValueError(f"Process {app} is already running!")
-        for app in self.applications:
-            env = os.environ.copy()
-            env["MUDFORGE_PROFILE"] = self.profile_path
-            env["MUDFORGE_APPNAME"] = app
-            env.update(self.env_vars)
-            cmd = f"{sys.executable} {self.startup}"
-            subprocess.Popen(shlex.split(cmd), env=env)
+        if not self.ensure_stopped():
+            raise ValueError(f"Server is already running!")
+        env = os.environ.copy()
+        env["MUDFORGE_PROFILE"] = self.profile_path
+        env.update(self.env_vars)
+        cmd = f"{sys.executable} {self.startup}"
+        subprocess.Popen(shlex.split(cmd), env=env)
 
     def operation_noop(self, op, args, unknown):
         pass
 
     def operation_end(self, op, args, unknown, sig, remove_pidfile=False):
-        for app in self.applications:
-            if not self.ensure_running(app):
-                console.print(f"Process {app} is not running.")
-                continue
-            pidfile = os.path.join(os.getcwd(), f"{app}.pid")
-            with open(pidfile, "r") as p:
-                if not (pid := int(p.read())):
-                    console.print(f"ProcessID for {app} corrupted.")
-                    continue
-            os.kill(pid, int(sig))
-            if remove_pidfile:
-                os.remove(pidfile)
-            console.print(f"Sent Signal {sig.value} ({sig.name}) to ProcessID {pid} - {app}")
+        if not self.ensure_running():
+            console.print(f"Server is not running.")
+            return
+        pidfile = os.path.join(os.getcwd(), self.pidfile)
+        with open(pidfile, "r") as p:
+            if not (pid := int(p.read())):
+                console.print(f"ProcessID for {self.name} corrupted.")
+                return
+        os.kill(pid, int(sig))
+        if remove_pidfile:
+            os.remove(pidfile)
+        console.print(f"Sent Signal {sig.value} ({sig.name}) to ProcessID {pid}")
 
     def operation_stop(self, op, args, unknown):
         self.operation_end(op, args, unknown, signal.SIGTERM)
@@ -248,16 +238,6 @@ class Launcher:
                 import sys
 
                 sys.path.insert(0, os.getcwd())
-
-                # choose either all apps or a specific app to focus on.
-                if args.app:
-                    if not (found := partial_match(args.app[0], self.application_names)):
-                        raise ValueError(
-                            f"No registered MudForge application: {args.app[0]}"
-                        )
-                    self.applications = [found]
-                else:
-                    self.applications = self.application_names
 
             # Find and execute the operation.
             if not (op_func := self.operations.get(option, None)):

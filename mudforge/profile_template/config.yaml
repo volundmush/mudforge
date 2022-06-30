@@ -36,5 +36,13 @@ website:
   plain: 80
   tls: 443
 
-# internal port used for the link to game server.
-link: 7000
+# Classes used by the game for various purposes. Add your own!
+classes:
+  telnet_protocol: "mudforge.net.telnet.TelnetMudConnection"
+  game_connection: "mudforge.net.game_conn.GameConnection"
+
+# Services launched when the game boots.
+services:
+  telnet: "mudforge.services.telnet.TCPTelnetServerService"
+  #  telnets: "mudforge.services.telnet.TLSTelnetServerService"
+  game: "mudforge.services.game.GameService"

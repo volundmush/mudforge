@@ -1,0 +1,8 @@
+
+CONFIG = {}
+SERVICES = {}
+CLASSES = {}
+NET_CONNECTIONS = {}
+GAME_CONNECTIONS = {}
+
+GAME = None

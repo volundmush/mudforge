@@ -1,11 +1,22 @@
 import os
 import time
+import asyncio
 from typing import List, Tuple
-
+import logging
 from rich.abc import RichRenderable
 from rich.console import Console
-from aiomisc import get_context
-from mudforge.shared import ConnectionDetails, ClientConnect, DisconnectReason, MudProtocol
+from mudforge.net.basic import ConnectionDetails, ClientConnect, DisconnectReason, MudProtocol
+import mudforge
+
+
+def _handle_connection_task_finish(task: asyncio.Task):
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        print(f"{task.get_name()} had an exception!")
+        logging.exception(f"Exception raised by task: {task.get_name()}")
 
 
 class MudConnection:
@@ -20,6 +31,7 @@ class MudConnection:
         self.in_events = list()
         self.console = Console(color_system=None, file=self, record=True)
         self.server_data = None
+        self.game_conn = None
 
     @property
     def conn_id(self) -> str:
@@ -77,7 +89,7 @@ class MudConnection:
 
     def on_start(self):
         self.started = True
-        self.in_events.append(ClientConnect(process_id=os.getpid(), client_id=self.conn_id, details=self.details))
+        mudforge.GAME.pending_connections[self.conn_id] = self
 
     def check_ready(self):
         pass

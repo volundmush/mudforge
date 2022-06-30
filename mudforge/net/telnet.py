@@ -1,23 +1,16 @@
-import os
-import time
 import json
 import asyncio
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 
 from rich.abc import RichRenderable
 
-from aiomisc import get_context
-from aiomisc.service import TCPServer, TLSServer
-
 from .telnet_protocol import TelnetFrame, TelnetConnection, TelnetOutMessage, TelnetOutMessageType
 from .telnet_protocol import TelnetInMessage, TelnetInMessageType
-from mudforge.shared import COLOR_MAP, COLOR_MAP_REVERSE, ConnectionDetails, MudProtocol
-from mudforge.shared import ClientUpdate, ClientDisconnected, DisconnectReason, ClientInput, ClientMSSPRequest, ClientGMCP
+from mudforge.net.basic import COLOR_MAP, ConnectionDetails, DisconnectReason
 
+from .mud_conn import MudConnection
 
-from .conn import MudConnection
-from mudforge.utils import generate_name
-
+import mudforge
 
 class TelnetMudConnection(MudConnection):
 
@@ -59,33 +52,29 @@ class TelnetMudConnection(MudConnection):
                 await self.writer.drain()
             if changed:
                 self.update_details(changed)
-                if self.started:
-                    self.in_events.append(ClientUpdate(process_id=os.getpid(), client_id=self.conn_id,
-                                                       details=self.details))
 
         if self.telnet_in_events:
             self.process_telnet_events()
 
-    async def run_all(self):
-        context = get_context()
-        inbox = await context["link_inbox"]
+    async def run_all(self, copyover = False):
         try:
-            await asyncio.gather(self.run_start(), self.run_reader(), self.run_in_events())
+            to_run = [self.run_reader()]
+            if not copyover:
+                to_run.append(self.run_start())
+            await asyncio.gather(*to_run)
         except asyncio.CancelledError as err:
             if self.task and not self.service.app.shutting_down:
                 # We were cancelled from the listening Service, but not gracefully. In this case, do quick cleanup.
-                inbox.put_nowait(ClientDisconnected(process_id=os.getpid(), client_id=self.conn_id,
-                                                    reason=DisconnectReason.EOF))
                 self.service.app.connections.pop(self.conn_id, None)
             raise err
 
-    async def run(self):
+    def run(self, copyover = False):
         self.running = True
-        out_buffer = bytearray()
-        self.telnet.start(out_buffer)
-        self.writer.write(out_buffer)
-        self.task = asyncio.create_task(self.run_all())
-        await self.task
+        if not copyover:
+            out_buffer = bytearray()
+            self.telnet.start(out_buffer)
+            self.writer.write(out_buffer)
+        self.task = asyncio.create_task(self.run_all(copyover=copyover))
 
     def close_connection(self):
         self.running = False
@@ -93,24 +82,12 @@ class TelnetMudConnection(MudConnection):
             task = self.task
             self.task = None
             task.cancel()
+        mudforge.GAME.pending_disconnections[self.conn_id] = DisconnectReason.EOF
 
     async def run_reader(self):
-        context = get_context()
-        inbox = await context["link_inbox"]
         while (data := await self.reader.read(1024)):
             await self.data_received(data)
-        inbox.put_nowait(ClientDisconnected(process_id=os.getpid(), client_id=self.conn_id,
-                                            reason=DisconnectReason.EOF))
         self.close_connection()
-
-    async def run_in_events(self):
-        context = get_context()
-        inbox = await context["link_inbox"]
-        while self.running:
-            if self.in_events:
-                await inbox.put(self.in_events.pop(0))
-            else:
-                await asyncio.sleep(0.05)
 
     def update_details(self, changed: dict):
         for k, v in changed.items():
@@ -151,22 +128,25 @@ class TelnetMudConnection(MudConnection):
     def telnet_in_to_conn_in(self, ev: TelnetInMessage):
         match ev.msg_type:
             case TelnetInMessageType.LINE:
-                return ClientInput(process_id=os.getpid(), client_id=self.conn_id, text=ev.data.decode(errors='ignore'))
+                self.in_events.append(ev.data.decode(errors='ignore'))
             case TelnetInMessageType.GMCP:
                 try:
                     data = json.loads(ev.data)
-                    return ClientGMCP(process_id=os.getpid(), client_id=self.conn_id, data=data)
+                    self.in_events.append(data)
                 except json.JSONDecodeError as err:
                     # TODO: log this!
                     pass
             case TelnetInMessageType.MSSP:
-                return ClientMSSPRequest(process_id=os.getpid(), client_id=self.conn_id)
+                # TODO: handle MSSP!
+                pass
 
     def process_telnet_events(self):
         for ev in self.telnet_in_events:
             if msg := self.telnet_in_to_conn_in(ev):
                 self.in_events.append(msg)
         self.telnet_in_events.clear()
+        if self.in_events:
+            mudforge.GAME.pending_input.add(self.conn_id)
 
     msg_map = {
         "line": TelnetOutMessageType.LINE,
@@ -175,7 +155,6 @@ class TelnetMudConnection(MudConnection):
     }
 
     async def send_line(self, data: RichRenderable):
-
         rendered = self.print(data)
         await self.send_telnet_out(TelnetOutMessage(TelnetOutMessageType.LINE, rendered))
 
@@ -199,39 +178,3 @@ class TelnetMudConnection(MudConnection):
 
     async def send_mssp(self, mssp: List[Tuple[str, str]]):
         await self.send_telnet_out(TelnetOutMessage(TelnetOutMessageType.MSSP, mssp))
-
-
-async def handle_telnet(reader, writer, tls: bool, service):
-    addr, port = writer.get_extra_info("peername")
-    context = get_context()
-    conns = await context["connections"]
-    classes = await context["classes"]
-    conn_details = ConnectionDetails(
-        client_id=generate_name(service.name, conns), tls=tls,
-        protocol=MudProtocol.TELNET, host_address=addr, host_port=port, connected=time.time())
-    protocol_class = classes["telnet_protocol"]
-    prot = protocol_class(service, reader, writer, conn_details)
-    conns[prot.conn_id] = prot
-    await prot.run()
-    conns.pop(prot.conn_id, None)
-
-
-class TCPTelnetServerService(TCPServer):
-    name = "telnet"
-
-    def __init__(self, shared: dict = None, config: dict = None):
-        super().__init__(address=shared["interfaces"]["external"], port=shared["telnet"]["plain"])
-
-    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        await handle_telnet(reader, writer, False, self)
-
-
-class TLSTelnetServerService(TLSServer):
-    name = "telnets"
-
-    def __init__(self, shared: dict = None, config: dict = None):
-        super().__init__(address=shared["interfaces"]["external"], port=shared["telnet"]["tls"],
-                   verify=False, **shared["tls"])
-
-    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        await handle_telnet(reader, writer, True, self)

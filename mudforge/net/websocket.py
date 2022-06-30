@@ -6,7 +6,7 @@ from websockets.exceptions import (
     ConnectionClosedOK,
 )
 
-from .conn import MudConnection
+from .mud_conn import MudConnection
 
 
 class WebSocketConnection(MudConnection):
