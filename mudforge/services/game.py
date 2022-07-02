@@ -67,8 +67,7 @@ class GameService(Service):
             conn = mudforge.CLASSES["game_connection"](v)
             mudforge.GAME_CONNECTIONS[k] = conn
 
-            # This will start up the new task on the connection.
-            conn.start()
+            await conn.start()
         self.pending_connections.clear()
 
     async def process_pending_input(self):

@@ -39,7 +39,7 @@ class GameConnection:
     def conn_id(self) -> str:
         return self.details.client_id
 
-    def start(self):
+    async def start(self):
         """
         Start up the Connection.
         You should never call this manually. It's called by GameService when it receives a message with a new Client.
