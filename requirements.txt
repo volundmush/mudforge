@@ -1,0 +1,8 @@
+aiomisc[uvloop]
+orjson
+websockets
+rich
+sanic
+passlib
+argon2-cffi
+uvloop
