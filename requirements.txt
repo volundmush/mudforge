@@ -1,8 +1,6 @@
-aiomisc[uvloop]
 orjson
 websockets
 rich
-sanic
-passlib
-argon2-cffi
 uvloop
+aiodns
+aiomisc[uvloop, aiohttp, asgi, cron, rich, uvicorn]

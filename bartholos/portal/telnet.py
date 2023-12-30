@@ -823,10 +823,15 @@ class TelnetService(TCPServer):
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
+        address, port = writer.get_extra_info("peername")
         protocol = self.protocol_class(reader, writer, self)
         protocol.capabilities.session_name = generate_name(
             "telnet", self.core.game_sessions.keys()
         )
+        protocol.capabilities.host_address = address
+        protocol.capabilities.host_port = port
+        reverse = await self.core.resolver.gethostbyaddr(address)
+        protocol.capabilities.host_names = reverse.aliases
         await self.core.handle_new_protocol(protocol)
 
 
@@ -865,8 +870,13 @@ class TLSTelnetService(TLSServer):
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
+        address, port = writer.get_extra_info("peername")
         protocol = self.protocol_class(reader, writer, self)
         protocol.capabilities.session_name = generate_name(
             "telnets", self.core.game_sessions.keys()
         )
+        protocol.capabilities.host_address = address
+        protocol.capabilities.host_port = port
+        reverse = await self.core.resolver.gethostbyaddr(address)
+        protocol.capabilities.host_names = reverse.aliases
         await self.core.handle_new_protocol(protocol)

@@ -11,6 +11,7 @@ class Capabilities:
     client_name: str = "UNKNOWN"
     client_version: str = "UNKNOWN"
     host_address: str = "UNKNOWN"
+    host_port: int = -1
     host_names: list[str, ...] = None
     encoding: str = "ascii"
     color: ColorType = ColorType.DEFAULT

@@ -51,4 +51,5 @@ nosetests.xml
 # PyCharm config
 .idea
 
-adventkai/profile_template/lib
+project_template/logs/*.log
+project_template/bartholos.run

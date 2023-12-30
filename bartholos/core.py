@@ -5,6 +5,7 @@ import logging
 import signal
 import sys
 import traceback
+import aiodns
 from logging.handlers import TimedRotatingFileHandler
 
 import bartholos
@@ -38,6 +39,7 @@ class Core:
         self.cold_start = True
         self.ep = None
         self.game_sessions: dict[str, "GameSession"] = dict()
+        self.resolver = None
 
     def copyover(self):
         data_dict = dict()
@@ -174,6 +176,7 @@ class Core:
             self.ep = entrypoint(*self.services.values(), log_format="rich")
             with self.ep as loop:
                 loop.add_signal_handler(int(signal.SIGUSR2), self.copyover)
+                self.resolver = aiodns.DNSResolver(loop=loop)
                 loop.run_forever()
         except Exception as err:
             logging.error(err)
