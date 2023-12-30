@@ -66,6 +66,11 @@ class ServerUserdata:
     userdata: dict[str, "Any"] = field(default_factory=dict)
 
 
+@dataclass
+class ServerDisconnect:
+    pass
+
+
 class GameSession:
     def __init__(self):
         self.capabilities = Capabilities()

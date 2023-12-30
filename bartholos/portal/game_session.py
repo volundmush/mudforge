@@ -45,6 +45,8 @@ class GameSession(BaseGameSession):
                 async with websocket_client.unix_connect("bartholos.run") as ws:
                     self.linked = True
                     delay_total = 0.0
+                    hello = ClientHello(self.userdata, self.capabilities)
+                    await ws.send(pickle.dumps(hello))
                     await asyncio.gather(self.run_ws_writer(ws), self.run_ws_reader(ws))
                 await self.send_text("Portal lost connection with game server...")
                 self.linked = False
