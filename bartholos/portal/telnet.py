@@ -2,17 +2,17 @@ import asyncio
 import typing
 import zlib
 import orjson
-from twisted.conch.telnet import TelnetProtocol
-
+import re
 import bartholos
 import logging
 import traceback
 from dataclasses import dataclass, field
 from aiomisc.service import TCPServer, TLSServer
-from .game_session import GameSession, ClientCommand
+from .game_session import GameSession, ClientCommand, ServerRenderableGMCP
 from enum import IntEnum
-
+from bartholos.utils import generate_name
 from rich.color import ColorType
+from rich.console import Group
 
 
 class TelnetCode(IntEnum):
@@ -379,7 +379,7 @@ class MTTSOption(TelnetOption):
         (1, "ansi"),
     ]
 
-    def __init__(self, protocol: TelnetProtocol):
+    def __init__(self, protocol):
         super().__init__(protocol)
         self.number_requests = 0
         self.last_received = ""
@@ -529,7 +529,6 @@ class MCCP2Option(TelnetOption):
 
     async def at_send_subnegotiate(self, msg):
         if not self.protocol.capabilities.mccp2_enabled:
-            print("enabling MCCP2 compression")
             await self.protocol.change_capabilities({"mccp2_enabled": True})
             self.protocol.compress_out = zlib.compressobj(9)
 
@@ -547,7 +546,6 @@ class MCCP3Option(TelnetOption):
     async def at_receive_subnegotiate(self, msg):
         if not self.protocol.capabilities.mccp3_enabled:
             await self.protocol.change_capabilities({"mccp3_enabled": True})
-            print("enabling MCCP3 compression")
             self.protocol.decompress_in = zlib.decompressobj()
             try:
                 self.protocol._telnet_read_buffer = bytearray(
@@ -611,6 +609,9 @@ class TelnetProtocol(GameSession):
         #        LineModeOption,
         #        EOROption,
     ]
+
+    def __repr__(self):
+        return f"<TelnetProtocol: {self.capabilities.session_name}>"
 
     def __init__(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, server
@@ -676,7 +677,6 @@ class TelnetProtocol(GameSession):
         """
         Responds to data converted from raw data after possible decompression.
         """
-        print(f"got a message: {repr(message)}")
         match message:
             case TelnetData():
                 await self.handle_data(message)
@@ -706,7 +706,6 @@ class TelnetProtocol(GameSession):
 
             # Process the line
             if line != "IDLE":
-                print(f"Got a Client Command: {line}")
                 await self.outgoing_queue.put(ClientCommand(text=line))
 
             # Remove the processed line from _app_data
@@ -745,7 +744,6 @@ class TelnetProtocol(GameSession):
         try:
             while data := await self._telnet_out_queue.get():
                 # each data should be a TelnetMessage.
-                print(f"Sending Message: {repr(data)}")
                 encoded = self.encode_outgoing_data(data)
                 self.writer.write(encoded)
                 match data:
@@ -777,6 +775,27 @@ class TelnetProtocol(GameSession):
             logging.error(traceback.format_exc())
             logging.error(err)
 
+    async def handle_incoming_renderable_gmcp(self, msg: ServerRenderableGMCP):
+        if msg.renderables:
+            g = Group(*msg.renderables)
+            result = self.print(g)
+            await self.send_text(result)
+        if self.capabilities.gmcp:
+            op: GMCPOption = self.options.get(TelnetCode.GMCP, None)
+            for command, data in msg.gmcp:
+                await op.send_gmcp(command, data)
+
+    async def send_text(self, text: str, force_endline=True):
+        text = re.sub(r"(?<!\r)\n", r"\r\n", text.replace("\r", ""))
+        if force_endline and not text.endswith("\r\n"):
+            text += "\r\n"
+        msg = TelnetData(
+            data=text.encode(self.capabilities.encoding, errors="replace").replace(
+                b"\xff", b"\xff\xff"
+            )
+        )
+        await self._telnet_out_queue.put(msg)
+
 
 class TelnetService(TCPServer):
     tls = False
@@ -805,13 +824,10 @@ class TelnetService(TCPServer):
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
         protocol = self.protocol_class(reader, writer, self)
-        self.connections.add(protocol)
-        try:
-            await protocol.run()
-        except Exception as err:
-            logging.error(traceback.format_exc())
-            logging.error(err)
-        self.connections.remove(protocol)
+        protocol.capabilities.session_name = generate_name(
+            "telnet", self.core.game_sessions.keys()
+        )
+        await self.core.handle_new_protocol(protocol)
 
 
 class TLSTelnetService(TLSServer):
@@ -834,7 +850,6 @@ class TLSTelnetService(TLSServer):
 
     def __init__(self, core):
         self.core = core
-        self.connections = set()
         self.protocol_class = bartholos.CLASSES["telnet_protocol"]
         settings = core.settings
 
@@ -851,10 +866,7 @@ class TLSTelnetService(TLSServer):
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
         protocol = self.protocol_class(reader, writer, self)
-        self.connections.add(protocol)
-        try:
-            await protocol.run()
-        except Exception as err:
-            logging.error(traceback.format_exc())
-            logging.error(err)
-        self.connections.remove(protocol)
+        protocol.capabilities.session_name = generate_name(
+            "telnets", self.core.game_sessions.keys()
+        )
+        await self.core.handle_new_protocol(protocol)

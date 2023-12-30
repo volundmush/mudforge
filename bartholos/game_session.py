@@ -1,10 +1,12 @@
 import asyncio
 from dataclasses import dataclass, field
 from rich.color import ColorType
+from rich.abc import RichRenderable
 
 
 @dataclass
 class Capabilities:
+    session_name: str = ""
     encryption: bool = False
     client_name: str = "UNKNOWN"
     client_version: str = "UNKNOWN"
@@ -62,12 +64,30 @@ class ServerSendables:
 
 
 @dataclass
+class ServerRenderableGMCP:
+    renderables: list[RichRenderable, ...] = field(default_factory=list)
+    gmcp: list[tuple[str, dict | list | None], ...] = field(default_factory=list)
+    response_id: int = -1
+
+    def add_gmcp(self, command: str, data=None):
+        self.gmcp.append((command, data))
+
+    def add_renderable(self, renderable: RichRenderable):
+        self.renderables.append(renderable)
+
+
+@dataclass
 class ServerUserdata:
     userdata: dict[str, "Any"] = field(default_factory=dict)
 
 
 @dataclass
 class ServerDisconnect:
+    pass
+
+
+@dataclass
+class ServerMSSP:
     pass
 
 
@@ -80,6 +100,7 @@ class GameSession:
         # This contains arbitrary data sent by the server which will be sent on a reconnect.
         self.userdata = None
         self.outgoing_queue = asyncio.Queue()
+        self.core = None
 
     async def run(self):
         pass
@@ -88,4 +109,7 @@ class GameSession:
         pass
 
     async def change_capabilities(self, changed: dict[str, "Any"]):
+        pass
+
+    async def at_capability_change(self, capability: str, value):
         pass

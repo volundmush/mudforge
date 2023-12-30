@@ -3,12 +3,16 @@ import uuid
 import typing
 import random
 import string
-from datetime import timezone
-import datetime
+import re
+from datetime import datetime, timezone
+import logging
+import os
+import types
+from inspect import getmembers, getmodule, getmro, ismodule, trace
+
 
 def utcnow():
-    dt = datetime.datetime.utcnow()
-    return dt.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc)
 
 
 def import_from_module(path: str) -> typing.Any:
@@ -20,6 +24,88 @@ def import_from_module(path: str) -> typing.Any:
     identifier = split_path.pop(-1)
     module = importlib.import_module(".".join(split_path))
     return getattr(module, identifier)
+
+
+def mod_import_from_path(path):
+    """
+    Load a Python module at the specified path.
+
+    Args:
+        path (str): An absolute path to a Python module to load.
+
+    Returns:
+        (module or None): An imported module if the path was a valid
+        Python module. Returns `None` if the import failed.
+
+    """
+    if not os.path.isabs(path):
+        path = os.path.abspath(path)
+    dirpath, filename = path.rsplit(os.path.sep, 1)
+    modname = filename.rstrip(".py")
+
+    try:
+        return importlib.machinery.SourceFileLoader(modname, path).load_module()
+    except OSError:
+        logging.error(
+            f"Could not find module '{modname}' ({modname}.py) at path '{dirpath}'"
+        )
+        return None
+
+
+def mod_import(module):
+    """
+    A generic Python module loader.
+
+    Args:
+        module (str, module): This can be either a Python path
+            (dot-notation like `evennia.objects.models`), an absolute path
+            (e.g. `/home/eve/evennia/evennia/objects/models.py`) or an
+            already imported module object (e.g. `models`)
+    Returns:
+        (module or None): An imported module. If the input argument was
+        already a module, this is returned as-is, otherwise the path is
+        parsed and imported. Returns `None` and logs error if import failed.
+
+    """
+    if not module:
+        return None
+
+    if isinstance(module, types.ModuleType):
+        # if this is already a module, we are done
+        return module
+
+    if module.endswith(".py") and os.path.exists(module):
+        return mod_import_from_path(module)
+
+    try:
+        return importlib.import_module(module)
+    except ImportError:
+        return None
+
+
+def callables_from_module(module):
+    """
+    Return all global-level callables defined in a module.
+
+    Args:
+        module (str, module): A python-path to a module or an actual
+            module object.
+
+    Returns:
+        callables (dict): A dict of {name: callable, ...} from the module.
+
+    Notes:
+        Will ignore callables whose names start with underscore "_".
+
+    """
+    mod = mod_import(module)
+    if not mod:
+        return {}
+    # make sure to only return callables actually defined in this module (not imports)
+    members = getmembers(
+        mod, predicate=lambda obj: callable(obj) and getmodule(obj) == mod
+    )
+    return dict((key, val) for key, val in members if not key.startswith("_"))
 
 
 # to_str is yoinked from Evennia.
@@ -200,7 +286,12 @@ def fresh_uuid4(existing) -> uuid:
 
 
 def partial_match(
-    match_text: str, candidates: typing.Iterable[typing.Any], key: callable = str, exact: bool = False) -> typing.Optional[typing.Any]:
+    match_text: str,
+    candidates: typing.Iterable[typing.Any],
+    key: callable = str,
+    exact: bool = False,
+    many_results: bool = False,
+) -> typing.Optional[typing.Any]:
     """
     Given a list of candidates and a string to search for, does a case-insensitive partial name search against all
     candidates, preferring exact matches.
@@ -210,17 +301,30 @@ def partial_match(
         candidates (list of obj): A list of any kind of object that key can turn into a string to search.
         key (callable): A callable that must return a string, used to do the search. this 'converts' the objects in the
             candidate list to strings.
+        exact (bool): If True, only exact matches are returned.
+        many_results (bool): If True, returns a list of all matches. If False, returns the first match.
+
 
     Returns:
-        Any or None.
+        Any or None, or a list[Any]
     """
-    candidate_list = sorted(candidates, key=lambda item: len(key(item)))
-    for candidate in candidate_list:
-        if match_text.lower() == key(candidate).lower():
-            return candidate
-        if not exact:
-            if key(candidate).lower().startswith(match_text.lower()):
+    mlow = match_text.lower()
+    out = list()
+
+    candidates_sorted = sorted((key(c).lower(), c) for c in candidates)
+
+    for can_lower, candidate in candidates_sorted:
+        if mlow == can_lower:
+            if many_results:
+                out.append(candidate)
+            else:
                 return candidate
+        elif not exact and can_lower.startswith(mlow):
+            if many_results:
+                out.append(candidate)
+            else:
+                return candidate
+    return out if many_results else None
 
 
 def generate_name(prefix: str, existing, gen_length: int = 20) -> str:
@@ -230,6 +334,7 @@ def generate_name(prefix: str, existing, gen_length: int = 20) -> str:
     while (u := gen()) not in existing:
         return u
 
+
 def get_server_pid() -> typing.Optional[int]:
     try:
         f = open("game_code.pid", mode="r")
@@ -237,3 +342,54 @@ def get_server_pid() -> typing.Optional[int]:
         return pid
     except:
         return None
+
+
+def iequals(first: str, second: str):
+    return str(first).lower() == str(second).lower()
+
+
+RE_STAT_NAME = re.compile(r"^[a-zA-Z0-9_ \-,.']+$")
+
+
+def validate_name(
+    name: str,
+    thing_type: str = "Stat",
+    matcher=RE_STAT_NAME,
+    ex_type: Exception = ValueError,
+) -> str:
+    """
+    Cleans and validates a stat name for use in the system.
+    This should strip/trim leading/trailing spaces and squish double spaces
+    and only allow certain characters.
+
+    Args:
+        name (str): The input value.
+        thing_type (str): The name of the type of thing being provided. used for errors.
+        matcher (regex): The regex to match against.
+
+    Returns:
+        str: The cleaned name.
+
+    Raises:
+        ValueError: With the error message.
+    """
+    name = name.strip()
+    # remove all double-spaces.
+    while "  " in name:
+        name = name.replace("  ", " ")
+    if not name:
+        raise ex_type(f"{thing_type} name cannot be empty.")
+    if not matcher.match(name):
+        raise ex_type(f"{thing_type} contains forbidden characters.")
+    return name
+
+
+class classproperty(property):
+    """
+    Decorator class which combines @property and @classmethod.
+
+    It does exactly what you'd expect those two decorators combined would do.
+    """
+
+    def __get__(self, owner_self, owner_cls):
+        return self.fget(owner_cls)

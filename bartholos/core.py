@@ -8,11 +8,12 @@ import traceback
 from logging.handlers import TimedRotatingFileHandler
 
 import bartholos
-from bartholos.utils import import_from_module
+from bartholos.utils import import_from_module, callables_from_module
 from aiomisc import get_context, receiver, entrypoint
 
 # Install Rich as the traceback handler.
 from rich.traceback import install as install_tb
+
 install_tb(show_locals=True)
 
 
@@ -36,6 +37,7 @@ class Core:
         self.copyover_data = None
         self.cold_start = True
         self.ep = None
+        self.game_sessions: dict[str, "GameSession"] = dict()
 
     def copyover(self):
         data_dict = dict()
@@ -55,8 +57,14 @@ class Core:
 
     def _setup_logging(self):
         # aiomisc handles logging but we'll help it along with some better settings.
-        log_handler = TimedRotatingFileHandler(filename=self.settings.SERVER_LOG_FILE, encoding="utf-8", utc=True,
-                                               when="midnight", interval=1, backupCount=14)
+        log_handler = TimedRotatingFileHandler(
+            filename=os.path.join(self.settings.LOG_DIR, f"{self.app}.log"),
+            encoding="utf-8",
+            utc=True,
+            when="midnight",
+            interval=1,
+            backupCount=14,
+        )
         formatter = logging.Formatter(fmt=f"[%(asctime)s] %(message)s", datefmt="%x %X")
         log_handler.setFormatter(formatter)
         logging.root.addHandler(log_handler)
@@ -91,7 +99,9 @@ class Core:
 
     async def _pre_start(self, entrypoint, services):
         # as some services might depend on others to be in a usable state
-        services_priority = sorted(services, key=lambda s: getattr(s, "load_priority", 0))
+        services_priority = sorted(
+            services, key=lambda s: getattr(s, "load_priority", 0)
+        )
 
         # The at_pre_start hook is called regardless and is used for initial setup.
         for s in services_priority:
@@ -101,11 +111,11 @@ class Core:
         # the cold start is run if there is no copyover data.
         if self.cold_start:
             for s in services_priority:
-                if (func := getattr(s, "at_cold_start", None)):
+                if func := getattr(s, "at_cold_start", None):
                     await func()
         else:
             for s in services_priority:
-                if (func := getattr(s, "at_copyover_start", None)):
+                if func := getattr(s, "at_copyover_start", None):
                     await func()
 
     async def _post_stop(self, entrypoint, services):
@@ -136,9 +146,19 @@ class Core:
             return
 
         try:
+            # Register SENDABLE classes.
+            for module_path in self.settings.SENDABLE_CLASS_MODULES:
+                for v in callables_from_module(module_path).values():
+                    bartholos.SENDABLES[v.sendable_name] = v
+        except Exception as e:
+            logging.error(e)
+            logging.error(traceback.format_exc())
+            return
+
+        try:
             for k, v in self.get_setting("SERVICES", dict()).items():
                 service_class = import_from_module(v)
-                if (check := getattr(service_class, "is_valid", None)):
+                if check := getattr(service_class, "is_valid", None):
                     if not check(self.settings):
                         logging.error(f"Invalid service: {k} ({v}), excluding.")
                         continue

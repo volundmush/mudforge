@@ -12,3 +12,5 @@ PENDING_INPUT = set()
 HOOKS = defaultdict(list)
 
 GAME = None
+
+SENDABLES = dict()

@@ -29,7 +29,4 @@ class LinkService(Service):
     async def handle_opening_message(self, ws, msg):
         match msg:
             case ClientHello():
-                await self.handle_new_client(ws, msg)
-
-    async def handle_new_client(self, ws, data: ClientHello):
-        print(f"New client received: {data}")
+                await self.core.handle_new_client(ws, msg)
