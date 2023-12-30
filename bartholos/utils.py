@@ -232,7 +232,7 @@ def generate_name(prefix: str, existing, gen_length: int = 20) -> str:
 
 def get_server_pid() -> typing.Optional[int]:
     try:
-        f = open("code.pid", mode="r")
+        f = open("game_code.pid", mode="r")
         pid = int(f.read())
         return pid
     except:

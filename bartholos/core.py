@@ -16,6 +16,16 @@ from rich.traceback import install as install_tb
 install_tb(show_locals=True)
 
 
+@receiver(entrypoint.PRE_START)
+async def pre_start(entrypoint, services):
+    await bartholos.GAME._pre_start(entrypoint, services)
+
+
+@receiver(entrypoint.POST_STOP)
+async def post_stop(entrypoint, services):
+    await bartholos.GAME._post_stop(entrypoint, services)
+
+
 class Core:
     app = None
 
@@ -79,7 +89,6 @@ class Core:
                     raise Exception("Invalid copyover data! Server going down.")
             return copyover_data
 
-    @receiver(entrypoint.PRE_START)
     async def _pre_start(self, entrypoint, services):
         # as some services might depend on others to be in a usable state
         services_priority = sorted(services, key=lambda s: getattr(s, "load_priority", 0))
@@ -99,8 +108,7 @@ class Core:
                 if (func := getattr(s, "at_copyover_start", None)):
                     await func()
 
-    @receiver(entrypoint.POST_STOP)
-    async def _post_stop(self, entrypoint):
+    async def _post_stop(self, entrypoint, services):
         pass
 
     def run(self):

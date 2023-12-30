@@ -35,8 +35,8 @@ class Launcher:
     the CLI script.
     """
     applications = {
-        "portal": os.path.join("code", "portal.py"),
-        "server": os.path.join("code", "server.py")
+        "portal": os.path.join("game_code", "portal.py"),
+        "server": os.path.join("game_code", "server.py")
     }
 
     env_vars = dict()

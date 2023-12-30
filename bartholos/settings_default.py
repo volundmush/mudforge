@@ -23,7 +23,7 @@ INTERFACES = {
 # Omit them to disable.
 TELNET = {
     "plain": 7999,
-    "tls": 7998
+#    "tls": 7998
 }
 
 # external ports used by (game client) websocket connections
@@ -59,11 +59,15 @@ PORTAL_SERVICES = {
     "telnets": "bartholos.portal.telnet.TLSTelnetService",
 }
 
+PORTAL_CLASSES = {
+    "telnet_protocol": "bartholos.portal.telnet.TelnetProtocol"
+}
+
 
 # Place to put log files, how often to rotate the log and how big each log file
 # may become before rotating.
 LOG_DIR = "logs"
-SERVER_LOG_FILE = os.path.join(LOG_DIR, "code.log")
+SERVER_LOG_FILE = os.path.join(LOG_DIR, "game_code.log")
 SERVER_LOG_DAY_ROTATION = 7
 SERVER_LOG_MAX_SIZE = 1000000
 

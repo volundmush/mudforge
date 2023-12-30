@@ -1,6 +1,7 @@
-from dataclasses import dataclass
-from rich.color import ColorSystem
-from typing import Optional
+import asyncio
+from dataclasses import dataclass, field
+from rich.color import ColorType
+
 
 @dataclass
 class Capabilities:
@@ -10,7 +11,7 @@ class Capabilities:
     host_address: str = "UNKNOWN"
     host_names: list[str, ...] = None
     encoding: str = "ascii"
-    color: Optional[ColorSystem] = None
+    color: ColorType = ColorType.DEFAULT
     width: int = 78
     height: int = 24
     mccp2: bool = False
@@ -20,7 +21,7 @@ class Capabilities:
     gmcp: bool = False
     msdp: bool = False
     mssp: bool = False
-    mxp: bool = False
+    mslp: bool = False
     mtts: bool = False
     naws: bool = False
     sga: bool = False
@@ -34,7 +35,52 @@ class Capabilities:
     mnes: bool = False
 
 
-class GameSession:
+@dataclass
+class ClientHello:
+    userdata: dict[str, "Any"] = field(default_factory=dict)
+    capabilities: Capabilities = field(default_factory=Capabilities)
 
+
+@dataclass
+class ClientCommand:
+    text: str = ""
+
+
+@dataclass
+class ClientUpdate:
+    capabilities: dict[str, "Any"] = field(default_factory=dict)
+
+
+@dataclass
+class ClientDisconnect:
+    pass
+
+
+@dataclass
+class ServerSendables:
+    sendables: list["Sendable", ...] = field(default_factory=list)
+
+
+@dataclass
+class ServerUserdata:
+    userdata: dict[str, "Any"] = field(default_factory=dict)
+
+
+class GameSession:
     def __init__(self):
         self.capabilities = Capabilities()
+        self.task_group = asyncio.TaskGroup()
+        self.tasks: dict[str, asyncio.Task] = {}
+        self.running = True
+        # This contains arbitrary data sent by the server which will be sent on a reconnect.
+        self.userdata = None
+        self.outgoing_queue = asyncio.Queue()
+
+    async def run(self):
+        pass
+
+    async def start(self):
+        pass
+
+    async def change_capabilities(self, changed: dict[str, "Any"]):
+        pass
