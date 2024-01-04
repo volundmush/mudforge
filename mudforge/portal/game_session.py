@@ -4,11 +4,12 @@ from collections import defaultdict
 from rich.color import ColorType, ColorSystem
 from typing import Optional
 import logging
+import re
 import traceback
 from websockets import client as websocket_client
 import pickle
 
-from bartholos.game_session import (
+from mudforge.game_session import (
     GameSession as BaseGameSession,
     Capabilities,
     ClientHello,
@@ -22,7 +23,7 @@ from bartholos.game_session import (
     ServerMSSP,
 )
 
-from bartholos.utils import lazy_property
+from mudforge.utils import lazy_property
 
 
 class GameSession(BaseGameSession):
@@ -38,9 +39,9 @@ class GameSession(BaseGameSession):
 
     @lazy_property
     def console(self):
-        from rich.console import Console as MudConsole
+        from rich.console import Console
 
-        return MudConsole(
+        return Console(
             color_system=self.rich_color_system(),
             width=self.capabilities.width,
             file=self,
@@ -84,16 +85,13 @@ class GameSession(BaseGameSession):
     async def start(self):
         self.tasks["ws"] = self.task_group.create_task(self.run_ws())
 
-    async def send_text(self, msg: str):
-        pass
-
     async def run_ws(self):
         delay_total = 0.0
 
         while self.running:
             delay = 0.0
             try:
-                async with websocket_client.unix_connect("bartholos.run") as ws:
+                async with websocket_client.unix_connect("mudforge.run") as ws:
                     self.linked = True
                     delay_total = 0.0
                     hello = ClientHello(self.userdata, self.capabilities)
@@ -132,28 +130,25 @@ class GameSession(BaseGameSession):
                     logging.error(f"Unexpected string data: {message}")
 
     async def handle_ws_message(self, msg):
-        match msg:
-            case ServerDisconnect():
-                await self.handle_incoming_disconnect(msg)
-            case ServerSendables():
-                await self.handle_incoming_sendables(msg)
-            case ServerRenderableGMCP():
-                await self.handle_incoming_renderable_gmcp(msg)
-            case ServerUserdata():
-                self.userdata = msg.userdata
-            case _:
-                await self.handle_incoming_other(msg)
-
-    async def handle_incoming_disconnect(self, msg):
-        pass
-
-    async def handle_incoming_sendables(self, msg):
-        pass
+        if (method := getattr(msg, "at_portal_receive", None)) is not None:
+            await method(self)
 
     async def handle_incoming_renderable_gmcp(self, msg):
         pass
 
-    async def handle_incoming_other(self, msg):
+    async def send_text(self, text: str, force_endline=True):
+        text = re.sub(r"(?<!\r)\n", r"\r\n", text.replace("\r", ""))
+        if force_endline and not text.endswith("\r\n"):
+            text += "\r\n"
+        await self.handle_send_text(text)
+
+    async def handle_send_text(self, text: str):
+        pass
+
+    async def send_gmcp(self, command: str, data=None):
+        pass
+
+    async def send_mssp(self, data: dict[str, str]):
         pass
 
     async def change_capabilities(self, changed: dict[str, "Any"]):

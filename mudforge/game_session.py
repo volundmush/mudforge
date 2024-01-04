@@ -48,20 +48,30 @@ class ClientHello:
 class ClientCommand:
     text: str = ""
 
+    async def at_server_receive(self, session):
+        pass
+
 
 @dataclass
 class ClientUpdate:
     capabilities: dict[str, "Any"] = field(default_factory=dict)
 
+    async def at_server_receive(self, session):
+        pass
+
 
 @dataclass
 class ClientDisconnect:
-    pass
+    async def at_server_receive(self, session):
+        pass
 
 
 @dataclass
 class ServerSendables:
     sendables: list["Sendable", ...] = field(default_factory=list)
+
+    async def at_portal_receive(self, session):
+        pass
 
 
 @dataclass
@@ -76,20 +86,30 @@ class ServerRenderableGMCP:
     def add_renderable(self, renderable: RichRenderable):
         self.renderables.append(renderable)
 
+    async def at_portal_receive(self, session):
+        await session.handle_incoming_renderable_gmcp(self)
+
 
 @dataclass
 class ServerUserdata:
     userdata: dict[str, "Any"] = field(default_factory=dict)
 
+    async def at_portal_receive(self, session):
+        session.userdata = self.userdata
+
 
 @dataclass
 class ServerDisconnect:
-    pass
+    async def at_portal_receive(self, session):
+        await session.close()
 
 
 @dataclass
 class ServerMSSP:
-    pass
+    data: dict[str, str] = field(default_factory=dict)
+
+    async def at_portal_receive(self, session):
+        await session.send_mssp(self.data)
 
 
 class GameSession:

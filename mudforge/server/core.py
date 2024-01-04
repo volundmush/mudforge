@@ -1,15 +1,15 @@
-import bartholos
+import mudforge
 import logging
 import traceback
 
-from bartholos.core import Core
+from mudforge.core import Core
 
 
 class ServerCore(Core):
     app = "server"
 
     async def handle_new_client(self, ws, data):
-        game_sess_class = bartholos.CLASSES["game_session"]
+        game_sess_class = mudforge.CLASSES["game_session"]
         sess = game_sess_class(ws, data)
         sess_name = data.capabilities.session_name
         sess.core = self

@@ -2,7 +2,7 @@ import pickle
 import logging
 import traceback
 
-from bartholos.game_session import (
+from mudforge.game_session import (
     GameSession as BaseGameSession,
     ClientHello,
     ClientCommand,

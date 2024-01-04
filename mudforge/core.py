@@ -8,8 +8,8 @@ import traceback
 import aiodns
 from logging.handlers import TimedRotatingFileHandler
 
-import bartholos
-from bartholos.utils import import_from_module, callables_from_module
+import mudforge
+from mudforge.utils import import_from_module, callables_from_module
 from aiomisc import get_context, receiver, entrypoint
 
 # Install Rich as the traceback handler.
@@ -20,12 +20,12 @@ install_tb(show_locals=True)
 
 @receiver(entrypoint.PRE_START)
 async def pre_start(entrypoint, services):
-    await bartholos.GAME._pre_start(entrypoint, services)
+    await mudforge.GAME._pre_start(entrypoint, services)
 
 
 @receiver(entrypoint.POST_STOP)
 async def post_stop(entrypoint, services):
-    await bartholos.GAME._post_stop(entrypoint, services)
+    await mudforge.GAME._post_stop(entrypoint, services)
 
 
 class Core:
@@ -43,10 +43,10 @@ class Core:
 
     def copyover(self):
         data_dict = dict()
-        for k, v in bartholos.SERVICES.items():
+        for k, v in mudforge.SERVICES.items():
             v.do_copyover(data_dict)
 
-        for func in bartholos.HOOKS["copyover"]:
+        for func in mudforge.HOOKS["copyover"]:
             func(data_dict)
 
         data_dict["pid"] = os.getpid()
@@ -79,9 +79,9 @@ class Core:
     def _setup_hooks(self):
         for k, v in self.get_setting("HOOKS", dict()).items():
             for p in v:
-                bartholos.HOOKS[k].append(import_from_module(p))
+                mudforge.HOOKS[k].append(import_from_module(p))
 
-        for func in bartholos.HOOKS["early_launch"]:
+        for func in mudforge.HOOKS["early_launch"]:
             func()
 
     def _generate_copyover_data(self) -> dict:
@@ -141,7 +141,7 @@ class Core:
         try:
             # Import and initialize classes and services from settings.
             for k, v in self.get_setting("CLASSES", dict()).items():
-                bartholos.CLASSES[k] = import_from_module(v)
+                mudforge.CLASSES[k] = import_from_module(v)
         except Exception as e:
             logging.error(f"{e}")
             logging.error(traceback.format_exc())
@@ -151,7 +151,7 @@ class Core:
             # Register SENDABLE classes.
             for module_path in self.settings.SENDABLE_CLASS_MODULES:
                 for v in callables_from_module(module_path).values():
-                    bartholos.SENDABLES[v.sendable_name] = v
+                    mudforge.SENDABLES[v.sendable_name] = v
         except Exception as e:
             logging.error(e)
             logging.error(traceback.format_exc())

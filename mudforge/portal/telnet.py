@@ -3,14 +3,14 @@ import typing
 import zlib
 import orjson
 import re
-import bartholos
+import mudforge
 import logging
 import traceback
 from dataclasses import dataclass, field
 from aiomisc.service import TCPServer, TLSServer
 from .game_session import GameSession, ClientCommand, ServerRenderableGMCP
 from enum import IntEnum
-from bartholos.utils import generate_name
+from mudforge.utils import generate_name
 from rich.color import ColorType
 from rich.console import Group
 
@@ -521,6 +521,19 @@ class MSSPOption(TelnetOption):
         self.negotiation.set()
         await self.protocol.change_capabilities({"mssp": True})
 
+    async def send_mssp(self, data: dict[str, str]):
+        if not data:
+            return
+
+        out = bytearray()
+        for k, v in data.items():
+            out.append(1)
+            out.extend(k.encode())
+            out.append(2)
+            out.extend(v.encode())
+
+        await self.send_subnegotiate(out)
+
 
 class MCCP2Option(TelnetOption):
     code: TelnetCode = TelnetCode.MCCP2
@@ -785,16 +798,23 @@ class TelnetProtocol(GameSession):
             for command, data in msg.gmcp:
                 await op.send_gmcp(command, data)
 
-    async def send_text(self, text: str, force_endline=True):
-        text = re.sub(r"(?<!\r)\n", r"\r\n", text.replace("\r", ""))
-        if force_endline and not text.endswith("\r\n"):
-            text += "\r\n"
+    async def handle_send_text(self, text: str):
         msg = TelnetData(
             data=text.encode(self.capabilities.encoding, errors="replace").replace(
                 b"\xff", b"\xff\xff"
             )
         )
         await self._telnet_out_queue.put(msg)
+
+    async def send_gmcp(self, command: str, data=None):
+        if self.capabilities.gmcp:
+            op: GMCPOption = self.options.get(TelnetCode.GMCP)
+            await op.send_gmcp(command, data)
+
+    async def send_mssp(self, data: dict[str, str]):
+        if self.capabilities.mssp:
+            op: MSSPOption = self.options.get(TelnetCode.MSSP)
+            await op.send_mssp(data)
 
 
 class TelnetService(TCPServer):
@@ -811,7 +831,7 @@ class TelnetService(TCPServer):
     def __init__(self, core):
         self.core = core
         self.connections = set()
-        self.protocol_class = bartholos.CLASSES["telnet_protocol"]
+        self.protocol_class = mudforge.CLASSES["telnet_protocol"]
         settings = core.settings
 
         external = settings.INTERFACES["external"]
@@ -855,7 +875,7 @@ class TLSTelnetService(TLSServer):
 
     def __init__(self, core):
         self.core = core
-        self.protocol_class = bartholos.CLASSES["telnet_protocol"]
+        self.protocol_class = mudforge.CLASSES["telnet_protocol"]
         settings = core.settings
 
         external = settings.INTERFACES["external"]

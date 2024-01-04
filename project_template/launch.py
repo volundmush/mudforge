@@ -15,16 +15,18 @@ import subprocess
 import shlex
 import signal
 
-import bartholos
-project = bartholos
+import mudforge
+
+project = mudforge
 
 from rich.traceback import install as install_tb
+
 install_tb(show_locals=True)
 from rich.console import Console
 
 console = Console()
 
-from bartholos.utils import partial_match
+from mudforge.utils import partial_match
 
 # let's make sure that cwd is always the dir that launch.py is in.
 
@@ -34,9 +36,10 @@ class Launcher:
     The base Launcher class. This interprets command line arguments. It is meant to be run by
     the CLI script.
     """
+
     applications = {
         "portal": os.path.join("game_code", "portal.py"),
-        "server": os.path.join("game_code", "server.py")
+        "server": os.path.join("game_code", "server.py"),
     }
 
     env_vars = dict()
@@ -68,8 +71,12 @@ class Launcher:
             description="BOO", formatter_class=argparse.RawTextHelpFormatter
         )
         parser.add_argument(
-            "-v", "--version", action="store_true", dest="show_version", default=False,
-            help="Show the program version."
+            "-v",
+            "--version",
+            action="store_true",
+            dest="show_version",
+            default=False,
+            help="Show the program version.",
         )
         parser.add_argument(
             "operation",
@@ -138,7 +145,9 @@ class Launcher:
         applications = ["server", "portal"]
         if args:
             if not (app := partial_match(args, self.applications.keys())):
-                raise ValueError(f"Application {args} not found. Choices are: {applications}")
+                raise ValueError(
+                    f"Application {args} not found. Choices are: {applications}"
+                )
             applications = [app]
         for app in applications:
             self.do_start(app)
@@ -164,12 +173,12 @@ class Launcher:
         applications = ["server", "portal"]
         if args:
             if not (app := partial_match(args, self.applications.keys())):
-                raise ValueError(f"Application {args} not found. Choices are: {applications}")
+                raise ValueError(
+                    f"Application {args} not found. Choices are: {applications}"
+                )
             applications = [app]
         for app in applications:
             self.do_end(app, sig, remove_pidfile=remove_pidfile)
-
-
 
     def operation_reload(self, op, args, unknown):
         self.operation_end(op, args, unknown, signal.SIGUSR1)
@@ -183,7 +192,9 @@ class Launcher:
     def operation_unknown(self, op, args, unknown):
         match op:
             case "_noop":
-                raise ValueError(f"This command requires arguments. Try {self.cmdname} --help")
+                raise ValueError(
+                    f"This command requires arguments. Try {self.cmdname} --help"
+                )
             case _:
                 self.operation_passthru(op, args, unknown)
 

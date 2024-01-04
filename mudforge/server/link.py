@@ -3,17 +3,18 @@ import logging
 from websockets.server import unix_serve
 from aiomisc.service import Service
 import pickle
-from bartholos.game_session import ClientHello
+from mudforge.game_session import ClientHello
 
 
 class LinkService(Service):
     def __init__(self, core):
+        super().__init__()
         self.core = core
         self.stop_event = asyncio.Event()
 
     async def start(self):
         while not self.stop_event.is_set():
-            async with unix_serve(self.handle_ws, path="bartholos.run") as server:
+            async with unix_serve(self.handle_ws, path="mudforge.run") as server:
                 await self.stop_event.wait()
 
     async def handle_ws(self, ws):

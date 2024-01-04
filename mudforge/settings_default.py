@@ -3,7 +3,7 @@ import sys
 from collections import defaultdict
 
 # The game name
-NAME = "Bartholos"
+NAME = "MudForge"
 
 
 # TLS data - this must be paths to PEM and KEY files.
@@ -37,20 +37,20 @@ WEBSITE = {"plain": 80, "tls": 443}
 HOSTNAME = "example.com"
 
 CORES = {
-    "portal": "bartholos.portal.core.PortalCore",
-    "server": "bartholos.server.core.ServerCore",
+    "portal": "mudforge.portal.core.PortalCore",
+    "server": "mudforge.server.core.ServerCore",
 }
 
 PORTAL_SERVICES = {
-    "telnet": "bartholos.portal.telnet.TelnetService",
-    "telnets": "bartholos.portal.telnet.TLSTelnetService",
+    "telnet": "mudforge.portal.telnet.TelnetService",
+    "telnets": "mudforge.portal.telnet.TLSTelnetService",
 }
 
-PORTAL_CLASSES = {"telnet_protocol": "bartholos.portal.telnet.TelnetProtocol"}
+PORTAL_CLASSES = {"telnet_protocol": "mudforge.portal.telnet.TelnetProtocol"}
 
-SERVER_CLASSES = {"game_session": "bartholos.server.game_session.GameSession"}
+SERVER_CLASSES = {"game_session": "mudforge.server.game_session.GameSession"}
 
-SERVER_SERVICES = {"link": "bartholos.server.link.LinkService"}
+SERVER_SERVICES = {"link": "mudforge.server.link.LinkService"}
 
 SENDABLE_CLASS_MODULES = list()
 

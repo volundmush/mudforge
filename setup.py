@@ -22,21 +22,6 @@ def get_requirements():
     return reqs
 
 
-def get_scripts():
-    """
-    Determine which executable scripts should be added. For Windows,
-    this means creating a .bat file.
-    """
-    if OS_WINDOWS:
-        batpath = os.path.join("bin", "windows", "mudforge.bat")
-        scriptpath = os.path.join(sys.prefix, "Scripts", "advent_launcher.py")
-        with open(batpath, "w") as batfile:
-            batfile.write('@"%s" "%s" %%*' % (sys.executable, scriptpath))
-        return [batpath, os.path.join("bin", "windows", "mudforge_launcher.py")]
-    else:
-        return [os.path.join("bin", "unix", "mudforge")]
-
-
 def package_data():
     """
     By default, the distribution tools ignore all non-python files.
@@ -74,7 +59,6 @@ setup(
     package_data={"": package_data()},
     install_requires=get_requirements(),
     zip_safe=False,
-    scripts=get_scripts(),
     classifiers=[
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.10",

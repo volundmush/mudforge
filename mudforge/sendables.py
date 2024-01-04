@@ -1,5 +1,5 @@
-from bartholos.utils import classproperty
-from bartholos.ansi import AnsiToHtmlConverter
+from mudforge.utils import classproperty
+from mudforge.ansi import AnsiToHtmlConverter
 
 
 RG = AnsiToHtmlConverter()
