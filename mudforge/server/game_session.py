@@ -11,7 +11,7 @@ from mudforge.game_session import (
     ServerDisconnect,
     ServerSendables,
     ServerUserdata,
-    ServerRenderableGMCP,
+    Sendable,
     ServerMSSP,
 )
 
@@ -73,8 +73,10 @@ class GameSession(BaseGameSession):
         self.userdata = msg.userdata
 
     async def handle_incoming_command(self, msg: ClientCommand):
-        out = ServerRenderableGMCP()
-        out.add_renderable(f"ECHO: {msg.text}")
+        out = ServerSendables()
+        m = Sendable()
+        m.add_renderable(f"ECHO: {msg.text}")
+        out.add_sendable(m)
         await self.outgoing_queue.put(out)
 
     async def handle_incoming_update(self, msg: ClientUpdate):
@@ -98,11 +100,15 @@ class GameSession(BaseGameSession):
             await self.start_fresh()
 
     async def start_resume(self):
-        msg = ServerRenderableGMCP()
+        out = ServerSendables()
+        msg = Sendable()
         msg.add_renderable("Welcome back to the game!")
-        await self.outgoing_queue.put(msg)
+        out.add_sendable(msg)
+        await self.outgoing_queue.put(out)
 
     async def start_fresh(self):
-        msg = ServerRenderableGMCP()
+        out = ServerSendables()
+        msg = Sendable()
         msg.add_renderable("Welcome to the game!")
-        await self.outgoing_queue.put(msg)
+        out.add_sendable(msg)
+        await self.outgoing_queue.put(out)

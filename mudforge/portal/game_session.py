@@ -19,7 +19,7 @@ from mudforge.game_session import (
     ServerDisconnect,
     ServerSendables,
     ServerUserdata,
-    ServerRenderableGMCP,
+    Sendable,
     ServerMSSP,
 )
 

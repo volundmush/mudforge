@@ -82,7 +82,7 @@ class Core:
                 mudforge.HOOKS[k].append(import_from_module(p))
 
         for func in mudforge.HOOKS["early_launch"]:
-            func()
+            func(self)
 
     def _generate_copyover_data(self) -> dict:
         copyover_data = None

@@ -8,7 +8,7 @@ import logging
 import traceback
 from dataclasses import dataclass, field
 from aiomisc.service import TCPServer, TLSServer
-from .game_session import GameSession, ClientCommand, ServerRenderableGMCP
+from .game_session import GameSession, ClientCommand, ServerSendables, Sendable
 from enum import IntEnum
 from mudforge.utils import generate_name
 from rich.color import ColorType
@@ -788,15 +788,16 @@ class TelnetProtocol(GameSession):
             logging.error(traceback.format_exc())
             logging.error(err)
 
-    async def handle_incoming_renderable_gmcp(self, msg: ServerRenderableGMCP):
-        if msg.renderables:
-            g = Group(*msg.renderables)
-            result = self.print(g)
-            await self.send_text(result)
-        if self.capabilities.gmcp:
-            op: GMCPOption = self.options.get(TelnetCode.GMCP, None)
-            for command, data in msg.gmcp:
-                await op.send_gmcp(command, data)
+    async def handle_incoming_renderable_gmcp(self, msg: ServerSendables):
+        for sendable in msg.sendables:
+            if sendable.renderables:
+                g = Group(*sendable.renderables)
+                result = self.print(g)
+                await self.send_text(result)
+            if self.capabilities.gmcp:
+                op: GMCPOption = self.options.get(TelnetCode.GMCP, None)
+                for command, data in sendable.gmcp:
+                    await op.send_gmcp(command, data)
 
     async def handle_send_text(self, text: str):
         msg = TelnetData(

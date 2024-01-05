@@ -75,16 +75,28 @@ class ServerSendables:
 
 
 @dataclass
-class ServerRenderableGMCP:
+class Sendable:
     renderables: list[RichRenderable, ...] = field(default_factory=list)
-    gmcp: list[tuple[str, dict | list | None], ...] = field(default_factory=list)
-    response_id: int = -1
+    gmcp: None | tuple[str, dict | list | None] = None
+    mode: str | None = None
 
-    def add_gmcp(self, command: str, data=None):
-        self.gmcp.append((command, data))
+    def set_gmcp(self, command: str, data=None):
+        self.gmcp = (command, data)
 
     def add_renderable(self, renderable: RichRenderable):
         self.renderables.append(renderable)
+
+    async def at_portal_receive(self, session):
+        await session.handle_incoming_renderable_gmcp(self)
+
+
+@dataclass
+class ServerSendables:
+    sendables: list[Sendable, ...] = field(default_factory=list)
+    response_id: int = -1
+
+    def add_sendable(self, sendable):
+        self.sendables.append(sendable)
 
     async def at_portal_receive(self, session):
         await session.handle_incoming_renderable_gmcp(self)
