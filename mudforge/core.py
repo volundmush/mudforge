@@ -33,6 +33,7 @@ class Core:
 
     def __init__(self, settings):
         self.settings = settings
+        mudforge.GAME = self
         self._log_handler = None
         self.services = dict()
         self.copyover_data = None

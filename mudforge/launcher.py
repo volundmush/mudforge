@@ -222,29 +222,13 @@ class Launcher:
             option = "_passthru"
 
         try:
-            if args.init:
-                self.option_init(args.init[0], unknown_args)
-                option = "_noop"
-                operation = "_noop"
-
-            if option in self.known_operations:
-                # first, ensure we are running this program from the proper directory.
-                self.set_profile_path(args)
-                os.chdir(self.profile_path)
-
-                # next, insert the new cwd into path.
-                import sys
-
-                sys.path.insert(0, os.getcwd())
-
             # Find and execute the operation.
             if not (op_func := self.operations.get(option, None)):
                 raise ValueError(f"No operation: {option}")
             op_func(operation, args, unknown_args)
         except ValueError as e:
             self.console.print(str(e))
-        except Exception as e:
+        except Exception:
             self.console.print_exception(show_locals=True)
-            print(f"Something done goofed: {e}")
 
 

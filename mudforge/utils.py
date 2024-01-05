@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import logging
 import os
 import types
+import traceback
 from inspect import getmembers, getmodule, getmro, ismodule, trace
 
 
@@ -393,3 +394,83 @@ class classproperty(property):
 
     def __get__(self, owner_self, owner_cls):
         return self.fget(owner_cls)
+
+
+def class_from_module(path, defaultpaths=None, fallback=None):
+    """
+    Return a class from a module, given the class' full python path. This is
+    primarily used to convert db_typeclass_path:s to classes.
+
+    Args:
+        path (str): Full Python dot-path to module.
+        defaultpaths (iterable, optional): If a direct import from `path` fails,
+            try subsequent imports by prepending those paths to `path`.
+        fallback (str): If all other attempts fail, use this path as a fallback.
+            This is intended as a last-resort. In the example of Evennia
+            loading, this would be a path to a default parent class in the
+            evennia repo itself.
+
+    Returns:
+        class (Class): An uninstantiated class recovered from path.
+
+    Raises:
+        ImportError: If all loading failed.
+
+    """
+    cls = None
+    err = ""
+    if defaultpaths:
+        paths = (
+            [path] + ["%s.%s" % (dpath, path) for dpath in make_iter(defaultpaths)]
+            if defaultpaths
+            else []
+        )
+    else:
+        paths = [path]
+
+    for testpath in paths:
+        if "." in path:
+            testpath, clsname = testpath.rsplit(".", 1)
+        else:
+            raise ImportError("the path '%s' is not on the form modulepath.Classname." % path)
+
+        try:
+            if not importlib.util.find_spec(testpath, package="evennia"):
+                continue
+        except ModuleNotFoundError:
+            continue
+
+        try:
+            mod = importlib.import_module(testpath, package="evennia")
+        except ModuleNotFoundError:
+            err = traceback.format_exc(30)
+            break
+
+        try:
+            cls = getattr(mod, clsname)
+            break
+        except AttributeError:
+            if len(trace()) > 2:
+                # AttributeError within the module, don't hide it
+                err = traceback.format_exc(30)
+                break
+    if not cls:
+        err = "\nCould not load typeclass '{}'{}".format(
+            path, " with the following traceback:\n" + err if err else ""
+        )
+        if defaultpaths:
+            err += "\nPaths searched:\n    %s" % "\n    ".join(paths)
+        else:
+            err += "."
+        logging.error(err)
+        if fallback:
+            logging.warning(f"Falling back to {fallback}.")
+            return class_from_module(fallback)
+        else:
+            # even fallback fails
+            raise ImportError(err)
+    return cls
+
+
+# alias
+object_from_module = class_from_module
