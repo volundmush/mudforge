@@ -137,7 +137,10 @@ class GameSession(BaseGameSession):
         pass
 
     async def send_text(self, text: str, force_endline=True):
-        text = re.sub(r"(?<!\r)\n", r"\r\n", text.replace("\r", ""))
+        if not text:
+            return
+        text = text.replace("\r", "")
+        text = text.replace("\n", "\r\n")
         if force_endline and not text.endswith("\r\n"):
             text += "\r\n"
         await self.handle_send_text(text)

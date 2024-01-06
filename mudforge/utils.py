@@ -417,6 +417,7 @@ def class_from_module(path, defaultpaths=None, fallback=None):
         ImportError: If all loading failed.
 
     """
+
     cls = None
     err = ""
     if defaultpaths:
@@ -432,7 +433,9 @@ def class_from_module(path, defaultpaths=None, fallback=None):
         if "." in path:
             testpath, clsname = testpath.rsplit(".", 1)
         else:
-            raise ImportError("the path '%s' is not on the form modulepath.Classname." % path)
+            raise ImportError(
+                "the path '%s' is not on the form modulepath.Classname." % path
+            )
 
         try:
             if not importlib.util.find_spec(testpath, package="evennia"):

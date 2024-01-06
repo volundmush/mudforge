@@ -83,7 +83,7 @@ class Sendable:
     def set_gmcp(self, command: str, data=None):
         self.gmcp = (command, data)
 
-    def add_renderable(self, renderable: RichRenderable):
+    def add_renderable(self, renderable: RichRenderable | str):
         self.renderables.append(renderable)
 
     async def at_portal_receive(self, session):
