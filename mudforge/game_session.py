@@ -37,6 +37,11 @@ class Capabilities:
     proxy: bool = False
     mnes: bool = False
 
+    def display_client_name(self):
+        if self.client_version != "UNKNOWN":
+            return f"{self.client_name} (v {self.client_version})"
+        return self.client_name
+
 
 @dataclass
 class ClientHello:
