@@ -1,15 +1,16 @@
 import asyncio
 import logging
-from websockets.server import unix_serve
-from aiomisc.service import Service
 import pickle
+
+from websockets.server import unix_serve
 from mudforge.game_session import ClientHello
+
+from ..core import Service
 
 
 class LinkService(Service):
     def __init__(self, core):
-        super().__init__()
-        self.core = core
+        super().__init__(core)
         self.stop_event = asyncio.Event()
 
     async def start(self):

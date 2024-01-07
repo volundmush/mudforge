@@ -1,6 +1,5 @@
-orjson
-websockets
 rich
-uvloop
+websockets
 aiodns
-aiomisc[uvloop, aiohttp, asgi, cron, rich, uvicorn]
+aiohttp
+orjson

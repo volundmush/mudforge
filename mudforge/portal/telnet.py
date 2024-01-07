@@ -2,17 +2,20 @@ import asyncio
 import typing
 import zlib
 import orjson
-import re
+import ssl
 import mudforge
 import logging
 import traceback
+
 from dataclasses import dataclass, field
-from aiomisc.service import TCPServer, TLSServer
-from .game_session import GameSession, ClientCommand, ServerSendables, Sendable
 from enum import IntEnum
-from mudforge.utils import generate_name
+
 from rich.color import ColorType
 from rich.console import Group
+
+from mudforge.utils import generate_name
+from .game_session import GameSession, ClientCommand, ServerSendables, Sendable
+from ..core import Service
 
 
 class TelnetCode(IntEnum):
@@ -818,7 +821,7 @@ class TelnetProtocol(GameSession):
             await op.send_mssp(data)
 
 
-class TelnetService(TCPServer):
+class TelnetService(Service):
     tls = False
 
     @classmethod
@@ -830,16 +833,26 @@ class TelnetService(TCPServer):
         return True
 
     def __init__(self, core):
-        self.core = core
+        super().__init__(core)
         self.connections = set()
         self.protocol_class = mudforge.CLASSES["telnet_protocol"]
         settings = core.settings
 
-        external = settings.INTERFACES["external"]
-        port = settings.TELNET.get("plain")
+        self.external = settings.INTERFACES["external"]
+        self.port = settings.TELNET.get("plain")
 
-        init_kwargs = {"address": external, "port": port}
-        super().__init__(**init_kwargs)
+    async def start(self):
+        # Create the server and start listening on the specified address and port
+        self.server = await asyncio.start_server(
+            self.handle_client, self.external, self.port
+        )
+
+        # Log or print that the server has started
+        logging.info(f"Telnet server started on {self.external}:{self.port}")
+
+        # Run the server until the service is stopped
+        async with self.server:
+            await self.server.serve_forever()
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -856,7 +869,7 @@ class TelnetService(TCPServer):
         await self.core.handle_new_protocol(protocol)
 
 
-class TLSTelnetService(TLSServer):
+class TLSTelnetService(Service):
     tls = True
 
     @classmethod
@@ -875,18 +888,31 @@ class TLSTelnetService(TLSServer):
         return True
 
     def __init__(self, core):
-        self.core = core
+        super().__init__(core)
         self.protocol_class = mudforge.CLASSES["telnet_protocol"]
         settings = core.settings
 
-        external = settings.INTERFACES["external"]
-        port = settings.TELNET.get("plain")
-        cert = settings.TLS.get("cert")
-        key = settings.TLS.get("key")
+        self.external = settings.INTERFACES["external"]
+        self.port = settings.TELNET.get("tls")
 
-        init_kwargs = {"address": external, "port": port, "cert": cert, "key": key}
+        self.cert = settings.TLS.get("cert")
+        self.key = settings.TLS.get("key")
 
-        super().__init__(**init_kwargs)
+    async def start(self):
+        # Create an SSL context
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(certfile=self.cert, keyfile=self.key)
+
+        # Create the server with SSL context and start listening
+        self.server = await asyncio.start_server(
+            self.handle_client, self.external, self.port, ssl=ssl_context
+        )
+
+        logging.info(f"TLS Telnet server started on {self.external}:{self.port}")
+
+        # Run the server until the service is stopped
+        async with self.server:
+            await self.server.serve_forever()
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
