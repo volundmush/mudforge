@@ -103,7 +103,7 @@ class Core:
     async def _pre_start(self, entrypoint, services):
         # as some services might depend on others to be in a usable state
         services_priority = sorted(
-            services, key=lambda s: getattr(s, "load_priority", 0)
+            services, key=lambda s: getattr(s, "load_priority", 0), reverse=True
         )
 
         # The at_pre_start hook is called regardless and is used for initial setup.
